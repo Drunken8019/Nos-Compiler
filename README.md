@@ -1,1 +1,4 @@
-# Nos_IR
+# Nos - Compiler
+---Currently under construction---
+For now, only an Intermediate Representation is being implemented (named Nir).
+The full fledged Nos-Language will be developed on top of Nir.
