@@ -1,0 +1,2 @@
+nasm -f win64 E:\Nos_IR\default.asm -o E:\Nos_IR\default.obj
+link E:\Nos_IR\default.obj kernel32.lib /subsystem:console /out:E:\Nos_IR\default.exe

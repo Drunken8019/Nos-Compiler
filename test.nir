@@ -1,0 +1,7 @@
+main:
+	jmp xx
+	exit 3130
+l1:
+l2:
+
+l3:
