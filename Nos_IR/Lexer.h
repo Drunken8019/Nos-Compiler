@@ -25,6 +25,7 @@ struct Token
 class Lexer
 {
 public:
+	Lexer();
 	Lexer(std::ifstream* i);
 	bool hasNext = true;
 	Token nextToken();
@@ -33,12 +34,15 @@ public:
 private:
 	bool loadTokens(std::string curLine);
 	std::ifstream* in;
-	size_t pos;
-	Location loc;
+	Location loc = { 0, 0 };
 	std::queue<Token> tokenBuffer;
 
 	std::unordered_map<std::string, TokenType> keywords = {
-		{"exit", TokenType::Exit}
+		{"exit", TokenType::Exit},
+	};
+
+	std::unordered_map<std::string, TokenType> symbols = {
+		{":", TokenType::Colon}
 	};
 };
 

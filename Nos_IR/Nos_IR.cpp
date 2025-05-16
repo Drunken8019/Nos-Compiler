@@ -37,7 +37,7 @@ void temp_compile(char* src)
 	while(l.hasNext)
 	{
 		temp = l.nextToken();
-		cout << temp.value << "\t" << temp.type << endl;
+		cout << temp.value << "\t" << temp.type << "\t" << temp.loc.line << " : " << temp.loc.column << endl;
 	}
 	ofstream out;
 	out.open("E:/Nos_IR/default.asm");

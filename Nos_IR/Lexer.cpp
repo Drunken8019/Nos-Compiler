@@ -1,5 +1,10 @@
 #include "Lexer.h"
 
+Lexer::Lexer()
+{
+	this->in = NULL;
+}
+
 Lexer::Lexer(std::ifstream* i)
 {
 	this->in = i;
@@ -17,6 +22,7 @@ Token Lexer::nextToken()
 				hasNext = false;
 				return { TokenType::Identifier, "EOF!", {0, 0} };
 			}
+			loc.line++;
 		} while (curLine.empty());
 		Lexer::loadTokens(curLine);
 	}
@@ -41,6 +47,7 @@ Token Lexer::peek()
 				hasNext = false;
 				return { TokenType::Identifier, "EOF!", {0, 0} };
 			}
+			loc.line++;
 		} while (curLine.empty());
 		Lexer::loadTokens(curLine);
 	}
@@ -61,7 +68,7 @@ bool Lexer::loadTokens(std::string curLine)
 			break;
 
 		case ':':
-			tokenBuffer.push({ TokenType::Colon, ":", {0, 0}});
+			tokenBuffer.push({ TokenType::Colon, ":", {loc.line, i + 1}});
 			break;
 		default:
 			if (std::isdigit(curLine[i]))
@@ -74,7 +81,7 @@ bool Lexer::loadTokens(std::string curLine)
 					if (i >= curLine.length()) break;
 				}
 				i--;
-				tokenBuffer.push({ TokenType::Number, temp, {0, 0} });
+				tokenBuffer.push({ TokenType::Number, temp, {loc.line, i+1} });
 			}
 			else if (std::isalpha(curLine[i]))
 			{
@@ -87,8 +94,8 @@ bool Lexer::loadTokens(std::string curLine)
 				}
 				i--;
 				auto it = keywords.find(temp);
-				if (it != keywords.end()) tokenBuffer.push({ it->second, temp, {0, 0} });
-				else tokenBuffer.push({ TokenType::Identifier, temp, {0, 0} });
+				if (it != keywords.end()) tokenBuffer.push({ it->second, temp, {loc.line, i + 1} });
+				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
 			}
 			break;
 		}
