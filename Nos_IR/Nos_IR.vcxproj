@@ -127,12 +127,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ArithmeticExpression.cpp" />
     <ClCompile Include="Lexer.cpp" />
     <ClCompile Include="Nos_IR.cpp" />
     <ClCompile Include="Parser.cpp" />
     <ClCompile Include="x86Generator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ArithmeticExpression.h" />
     <ClInclude Include="Lexer.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="x86Generator.h" />

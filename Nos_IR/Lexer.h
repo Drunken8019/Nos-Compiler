@@ -4,10 +4,13 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+#include <algorithm>
+#include <cctype>
 
 enum TokenType
 {
-	Identifier, Exit, Number, Colon
+	COMPILER_EOF, COMPILER_IDENT_COUNT,
+	Identifier, Exit, Number, Colon, Equals, Semicolon
 };
 
 struct Location
@@ -41,8 +44,10 @@ private:
 		{"exit", TokenType::Exit},
 	};
 
-	std::unordered_map<std::string, TokenType> symbols = {
-		{":", TokenType::Colon}
+	std::unordered_map<char, TokenType> symbols = {
+		{':', TokenType::Colon},
+		{'=', TokenType::Equals},
+		{';', TokenType::Semicolon}
 	};
 };
 

@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include "Lexer.h"
+#include "Parser.h"
 using namespace std;
 
 void temp_compile(char* src);
@@ -32,27 +32,18 @@ void temp_compile(char* src)
 {
 	ifstream in;
 	in.open(src);
-	Lexer l = { &in };
+	/*Lexer l = {&in};
 	Token temp;
 	while(l.hasNext)
 	{
 		temp = l.nextToken();
 		cout << temp.value << "\t" << temp.type << "\t" << temp.loc.line << " : " << temp.loc.column << endl;
-	}
+	}*/
 	ofstream out;
 	out.open("E:/Nos_IR/default.asm");
-
-	out << 
-		"global main\n"
-		"extern ExitProcess\n"
-		"section .bss\n"
-		"section .data\n"
-		"section .text\n"
-		"main:\n";
-
-	in.close();
-	out.flush();
-	out.close();
+	
+	Parser p = { &in, &out };
+	p.parse();
 }
 
 bool checkExtension(char* s)

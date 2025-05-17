@@ -1,26 +1,42 @@
 #include "Parser.h"
 #include "x86Generator.h"
 
-Parser::Parser(Lexer l)
+Parser::Parser(std::ifstream* in, std::ofstream* out)
 {
-	this->lex = l;
+	this->lex = { in };
+	this->gen = { out };
 }
 
 void Parser::parse()
 {
-	while(lex.hasNext)
+	gen.printDefaultHeader();
+	gen.startMatching(lex);
+	/*while (lex.hasNext)
 	{
 		Token curToken = lex.nextToken();
+		Token aheadToken;
+		if (lex.hasNext) aheadToken = lex.peek();
+
 		switch(curToken.type)
 		{
 		case TokenType::Identifier:
-			if(lex.hasNext)
+			switch(aheadToken.type)
 			{
-				if(lex.nextToken().type == TokenType::Colon)
-				{
-				}
+			case TokenType::Colon:
+				gen.printAsm(curToken.value + ":\n");
+				break;
+
+			case TokenType::Equals:
+				break;
 			}
 			break;
+
+		case TokenType::Return:
+			gen.printAsm("sub rsp, 40\n");
+			gen.printAsm("mov rcx, " + aheadToken.value + "\n");
+			gen.printAsm("call ExitProcess");
+			break;
 		}
-	}
+		std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
+	}*/
 }

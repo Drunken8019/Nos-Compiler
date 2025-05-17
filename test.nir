@@ -1,4 +1,5 @@
 main:
-	exit 69
-	call xyz
-	return
+	exit 99;
+	
+	
+	
