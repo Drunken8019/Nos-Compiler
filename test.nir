@@ -1,6 +1,6 @@
 def main()
 {
-	let var2 = 11;
-	let var3 = var2;
-	exit 22;
+	let a = 10;
+	a = a + 10;
+	exit a;
 }

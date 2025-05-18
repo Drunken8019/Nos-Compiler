@@ -9,8 +9,8 @@
 
 enum TokenType
 {
-	COMPILER_EOF, COMPILER_IDENT_COUNT,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, 
+	COMPILER_EOF, COMPILER_EMPTY,
+	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Plus, Minus, Mult, Div,
 	Let, Define, Identifier, Exit, Number,
 };
 
@@ -56,7 +56,11 @@ private:
 		{'(', TokenType::LParen},
 		{')', TokenType::RParen},
 		{'=', TokenType::Equals},
-		{';', TokenType::Semicolon}
+		{';', TokenType::Semicolon},
+		{'+', TokenType::Plus},
+		{'-', TokenType::Minus},
+		{'*', TokenType::Mult},
+		{'/', TokenType::Div},
 	};
 };
 

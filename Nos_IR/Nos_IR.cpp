@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <vector>
+#include <ctime>
 #include "Parser.h"
 using namespace std;
 
@@ -18,9 +18,16 @@ int main(int argc, char* argv[])
 	{
 		if (checkExtension(argv[1]))
 		{
-			cout << "---Starting---" << endl;
+			time_t stamp = time(NULL);
+			tm start;
+			localtime_s(&start, &stamp);
+			cout << "Started at " << start.tm_hour << ":" << start.tm_min << ":" << start.tm_sec << endl;
 			temp_compile(argv[1]);
-			cout << "---Finished---" << endl;
+			stamp = time(NULL);
+			tm end;
+			localtime_s(&end, &stamp);
+			int took = end.tm_sec - start.tm_sec;
+			cout << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
 		}
 		else cout << "Wrong file type. Correct extension: .nir";
 	}
