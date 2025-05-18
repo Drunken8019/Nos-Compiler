@@ -10,6 +10,28 @@ x86Generator::x86Generator(std::ofstream* out)
 	this->out = out;
 }
 
+int x86Generator::calcVarOffset(int offset)
+{
+	return (offset * 8);
+}
+
+std::string x86Generator::resolveIdent(Token t)
+{
+	std::string result = "";
+	auto f = varTable.find(t.value);
+	if (f != varTable.end())
+	{
+		result.append("[rsp+");
+		result.append(std::to_string(calcVarOffset(f->second)));
+		result.append("]");
+	}
+	else
+	{
+		std::cout << "Symbol not recognized. At line " << t.loc.line << ", col " << t.loc.column << std::endl;
+	}
+	return result;
+}
+
 void x86Generator::printDefaultHeader()
 {
 	*out <<
@@ -26,45 +48,57 @@ void x86Generator::printAsm(std::string s)
 	//out->write(s.c_str(), s.length()-1);
 }
 
-
-std::string x86Generator::x86Code(CodeTemplate CTemplate)
+void x86Generator::printMov(Token des, Token src)
 {
-	/*if (CTemplate.isVarDef)
+	if(src.type == TokenType::Number)
 	{
-		varTable.insert({ tokens.at(1).value, variableCounter });
-		variableCounter++;
-	}*/
-
-	std::string result = "";
-	Token curToken;
-	for (Option<std::string, Token> o : CTemplate.indexedx86Code)
-	{
-		switch (o.isLeft)
-		{
-		case true:
-			result.append(o.getLeft());
-			break;
-		case false:
-			curToken = o.getRight();
-			result.append(curToken.value);
-			/*if (curToken.type == TokenType::Identifier && CTemplate.isVarDef)
-			{
-				auto varRes = varTable.find(curToken.value);
-				if (varRes != varTable.end())
-				{
-					int varOffset = (variableCounter - varRes->second) * 4;
-					result.append("[ESP+");
-					result.append(std::to_string(varOffset));
-					result.append("]");
-				}
-			}
-			else
-			{
-				result.append(curToken.value);
-			}*/
-			break;
-		}
+		printMov(resolveIdent(des), src.value, "qword");
 	}
-	printAsm(result);
-	return result;
+	else if(src.type == TokenType::Identifier)
+	{
+		printMov("r11", resolveIdent(src), "");
+		printMov(resolveIdent(des), "r11", "");
+	}
+}
+void x86Generator::printMov(Token des, std::string src)
+{
+	printMov(resolveIdent(des), src, "qword");
+}
+void x86Generator::printMov(std::string des, Token src)
+{
+	if (src.type == TokenType::Identifier) printMov(des, resolveIdent(src), "qword");
+	else printMov(des, src.value, "qword");
+}
+void x86Generator::printMov(std::string des, std::string src, std::string type)
+{
+	if (!type.empty()) type.append(" ");
+	*out << "mov " << type << des << ", " << src << std::endl;
+}
+
+void x86Generator::printAddSubMul(std::string x86Operand, Token des, Token src)
+{
+	if (src.type == TokenType::Number)
+	{
+		printAddSubMul(x86Operand, resolveIdent(des), src.value, "qword");
+	}
+	else if (src.type == TokenType::Identifier)
+	{
+		printMov("r11", resolveIdent(src), "qword");
+		printAddSubMul(x86Operand, resolveIdent(des), "r11", "qword");
+		printMov(resolveIdent(des), "r11", "qword");
+	}
+}
+void x86Generator::printAddSubMul(std::string x86Operand, Token des, std::string src)
+{
+	printAddSubMul(x86Operand, resolveIdent(des), src, "qword");
+}
+void x86Generator::printAddSubMul(std::string x86Operand, std::string des, Token src)
+{
+	if (src.type == TokenType::Identifier) printAddSubMul(x86Operand, des, resolveIdent(src), "qword");
+	else printAddSubMul(x86Operand, des, src.value, "qword");
+}
+void x86Generator::printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type)
+{
+	if (!type.empty()) type.append(" ");
+	*out << x86Operand << " " << type << des << ", " << src << std::endl;
 }

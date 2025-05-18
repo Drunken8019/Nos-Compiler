@@ -1,7 +1,6 @@
 #pragma once
 #include <fstream>
 #include "Lexer.h"
-#include "ArithmeticExpression.h"
 
 enum CTemplates
 {
@@ -35,19 +34,25 @@ public:
 		R getRight() { return opt2; }
 	};
 
-	struct CodeTemplate
-	{
-		std::vector<Option<std::string, Token>> indexedx86Code;
-	};
-
-	std::unordered_map<std::string, int> varTable;
-
 	std::ofstream* out;
+
 
 	x86Generator();
 	x86Generator(std::ofstream* out);
+
+	int calcVarOffset(int offset);
+	std::string resolveIdent(Token t);
+	std::unordered_map<std::string, int> varTable;
+
 	void printAsm(std::string s);
 	void printDefaultHeader();
-	std::string x86Code(CodeTemplate CTemplate);
-	int variableCounter = 0;
+	void printMov(Token des, Token src);
+	void printMov(Token des, std::string src);
+	void printMov(std::string des, Token src);
+	void printMov(std::string des, std::string src, std::string type);
+
+	void printAddSubMul(std::string x86Operand, Token des, Token src);
+	void printAddSubMul(std::string x86Operand, Token des, std::string src);
+	void printAddSubMul(std::string x86Operand, std::string des, Token src);
+	void printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type);
 };

@@ -7,7 +7,7 @@ Parser::Parser(std::ifstream* in, std::ofstream* out)
 	this->gen = { out };
 }
 
-int Parser::calcVarOffset(int offset)
+/*int Parser::calcVarOffset(int offset)
 {
 	return (offset * 8);
 }
@@ -27,7 +27,7 @@ std::string Parser::resolveIdent(Token t)
 		std::cout << "Symbol not recognized. At line " << t.loc.line << ", col " << t.loc.column << std::endl;
 	}
 	return result;
-}
+}*/
 
 std::vector<Token> Parser::getStatement()
 {
@@ -122,10 +122,10 @@ bool Parser::parseFunctionDef(std::vector<Token> stmnt)
 	if(i+1 < stmnt.size()) i++;
 	if (stmnt[i].type != TokenType::LCBrace) { std::cout << "Expected \"{\"" << std::endl; return false; }
 
-	gen.x86Code({ { {stmnt[1]}, {":\n"} } }); //TESTING
+	gen.printAsm(stmnt[1].value + ":\n"); //TESTING
 	if (stmnt[1].value == "main") //DEBUG, will be rmeoved
 	{
-		gen.printAsm("\tsub rsp, 360\n"); 
+		gen.printAsm("sub rsp, 360\n"); 
 	} 
 
 	std::vector<Token> nextStmnt = getStatement();
@@ -141,32 +141,31 @@ bool Parser::parseFunctionDef(std::vector<Token> stmnt)
 	}
 
 	if (!functionBodyClosed) { std::cout << "Expected \"}\"" << std::endl; return false; }
-	//std::cout << stmnt[1].value << ":" << std::endl;
 	return true;
 }
 
 bool Parser::parseVarDef(std::vector<Token> stmnt)
 {
 	if (stmnt[1].type != TokenType::Identifier) { std::cout << "Expected identifier after \"let\"" << std::endl; return false; }
-	else if(varTable.find(stmnt[1].value) != varTable.end()) { std::cout << "\"" << stmnt[1].value << "\" is already defined" << std::endl; return false; }
+	else if(gen.varTable.find(stmnt[1].value) != gen.varTable.end()) { std::cout << "\"" << stmnt[1].value << "\" is already defined" << std::endl; return false; }
 	else if (stmnt[2].type == TokenType::Semicolon) 
 	{ 
-		varTable.insert({ stmnt[1].value, varCount });
+		gen.varTable.insert({ stmnt[1].value, varCount });
 		varCount++;
 		return true; 
 	}
 	else if (stmnt[2].type != TokenType::Equals) { std::cout << "Expected \"=\"" << std::endl; return false; }
 
-	varTable.insert({ stmnt[1].value, varCount });
+	gen.varTable.insert({ stmnt[1].value, varCount });
 
 	std::vector<Token> expr;
 	expr.assign(stmnt.begin() + 3, stmnt.end() - 1);
 
 
-	compExpr(expr, resolveIdent(stmnt[1]));
+	//compExpr(expr, resolveIdent(stmnt[1]));
+	compExpr(expr, "", stmnt[1]);
 	varCount++;
 	
-	//TODO: Compute expr
 
 	return true;
 }
@@ -185,24 +184,28 @@ bool Parser::parseVarAsign(std::vector<Token> stmnt)
 
 	std::vector<Token> expr;
 	expr.assign(stmnt.begin()+2, stmnt.end()-1);
-	compExpr(expr, resolveIdent(stmnt[0]));
+	//compExpr(expr, resolveIdent(stmnt[0]));
+	compExpr(expr, "", stmnt[0]);
 	varCount++;
 }
 
-bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest)
+bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest)
 {
 	if(expr.size() == 1)
 	{
-		switch (expr[0].type)
+		if(!x86Dest.empty()) gen.printMov(x86Dest, expr[0]);
+		else gen.printMov(dest, expr[0]);
+		/*switch (expr[0].type)
 		{
 		case TokenType::Number:
 			gen.printAsm("\tmov qword " + x86Dest + ", " + expr[0].value + "\n");
+			
 			break;
 		case TokenType::Identifier:
 			gen.printAsm("\tmov r11, " + resolveIdent(expr[0]) + "\n");
 			gen.printAsm("\tmov " + x86Dest + ", r11\n");
 			break;
-		}
+		}*/
 		return true;
 	}
 	//ONLY 3 Operator expr supported rn: left OPERATOR right
@@ -210,13 +213,13 @@ bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest)
 	switch(expr[1].type)
 	{
 	case TokenType::Plus:
-		compSMA(expr[0], expr[2], x86Dest, "add");
+		compSMA(expr[0], expr[2], x86Dest, dest, "add");
 		break;
 	case TokenType::Minus:
-		compSMA(expr[0], expr[2], x86Dest, "sub");
+		compSMA(expr[0], expr[2], x86Dest, dest, "sub");
 		break;
 	case TokenType::Mult:
-		compSMA(expr[0], expr[2], x86Dest, "imul");
+		compSMA(expr[0], expr[2], x86Dest, dest, "imul");
 		break;
 	case TokenType::Div:
 		break;
@@ -224,7 +227,7 @@ bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest)
 	return true;
 }
 
-bool Parser::compSMA(Token l, Token r, std::string x86Dest, std::string x86Operand)
+bool Parser::compSMA(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand)
 {
 	//Potential optimization: e.g. 5+3 = 8, jus to fucking lazy rn
 	/*if (l.type == TokenType::Number && l.type == TokenType::Number)
@@ -243,25 +246,34 @@ bool Parser::compSMA(Token l, Token r, std::string x86Dest, std::string x86Opera
 		gen.printAsm("mov " + x86Dest + "rdx");
 	}*/
 
-	std::string lRes = l.value, rRes = r.value;
+	/*std::string lRes = l.value, rRes = r.value;
 	if (l.type == TokenType::Identifier) lRes = resolveIdent(l);
 	if (r.type == TokenType::Identifier) rRes = resolveIdent(r);
 
-	gen.printAsm("\tmov rdx, " + lRes + "\n");
-	gen.printAsm("\t" + x86Operand + " rdx, " + rRes + "\n");
-	gen.printAsm("\tmov " + x86Dest + ", rdx" + "\n");
+	gen.printAsm("\tmov rdx, " + lRes + "\n");*/
+
+	gen.printMov("rdx", l);
+	//gen.printAsm("\t" + x86Operand + " rdx, " + rRes + "\n");
+	gen.printAddSubMul(x86Operand, "rdx", r);
+	if (!x86Dest.empty()) gen.printMov(x86Dest, "rdx", "qword");
+	else gen.printMov(dest, "rdx");
+	//gen.printAsm("\tmov " + x86Dest + ", rdx" + "\n");
 	return true;
 }
 
 bool Parser::parseExit(std::vector<Token> stmnt)
 {
-	if (stmnt[1].type == TokenType::Number) 
+	std::vector<Token> expr;
+	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
+	compExpr({ expr }, "rcx", {});
+	gen.printAsm("call ExitProcess\n");
+	/*if (stmnt[1].type == TokenType::Number)
 	{
 		gen.printAsm("\tmov rcx, " + stmnt[1].value + "\n\tcall ExitProcess\n"); //TESTING
 	}
 	else if(stmnt[1].type == TokenType::Identifier)
 	{
 		gen.printAsm("\tmov rcx, " + resolveIdent(stmnt[1]) + "\n\tcall ExitProcess\n");
-	}
+	}*/
 	return true;
 }
