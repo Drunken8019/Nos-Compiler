@@ -3,17 +3,15 @@
 #include "Lexer.h"
 #include "ArithmeticExpression.h"
 
+enum SyntaxType
+{
+	Function, VarDef, ExitProc
+};
+
 class x86Generator
 {
-public:
-	x86Generator();
-	x86Generator(std::ofstream* out);
-	void printAsm(std::string s);
-	void printDefaultHeader();
-	void startMatching(Lexer l);
-
 private:
-	class Snippet 
+	class Snippet
 	{
 	private:
 		ArithmeticExpression expr;
@@ -66,47 +64,45 @@ private:
 
 	class SyntaxTemplate
 	{
-	private:
-		CodeTemplate CTemplate;
-
 	public:
+		CodeTemplate CTemplate;
 		std::vector<Snippet> def;
-		SyntaxTemplate(std::vector<Snippet> d, CodeTemplate CT) : def(d), CTemplate(CT)
+		SyntaxType type;
+		SyntaxTemplate(SyntaxType t, std::vector<Snippet> d, CodeTemplate CT) : type(t), def(d), CTemplate(CT)
 		{
-		}
-
-		std::string x86Code(std::vector<Token> tokens)
-		{
-			std::string result = "";
-			for(Option o : CTemplate.indexedx86Code)
-			{
-				switch(o.isString)
-				{
-				case true:
-					result.append(o.getx86Code());
-					break;
-				case false:
-					result.append(tokens.at(o.getIndex()).value);
-					break;
-				}
-			}
-			return result;
 		}
 	};
 
-	std::vector<SyntaxTemplate> syntax = 
+	std::vector<SyntaxTemplate> syntax =
 	{
-		{
-			{TokenType::Identifier, TokenType::Colon},
-			{{0, 1, "\n"}}
+		{SyntaxType::Function,
+			{TokenType::Define, TokenType::Identifier, TokenType::RCBrace},
+			{{1, 2, "\n"}}
 		},
-		{
+		{SyntaxType::ExitProc,
 			{TokenType::Exit, TokenType::Number, TokenType::Semicolon},
 			{{"mov rcx, ", 1, "\ncall ExitProcess\n"}}
 		},
+		{SyntaxType::VarDef,
+			{TokenType::Let, TokenType::Identifier, TokenType::Equals, TokenType::Number, TokenType::Semicolon},
+			{{"push dword ", 3, "\n"}}
+		},
+		{SyntaxType::VarDef,
+			{TokenType::Let, TokenType::Identifier, TokenType::Equals, TokenType::Identifier, TokenType::Semicolon},
+			{{"push dword, ", 3, "\ncall ExitProcess\n"}}
+		},
 	};
 
+	std::unordered_map<std::string, int> varTable;
+
 	std::ofstream* out;
+
+public:
+	x86Generator();
+	x86Generator(std::ofstream* out);
+	void printAsm(std::string s);
+	void printDefaultHeader();
+	void startMatching(Lexer l);
+	std::string x86Code(std::vector<Token> tokens, SyntaxTemplate t);
+	int variableCounter = 0;
 };
-
-

@@ -10,29 +10,11 @@ public:
 	void parse();
 
 private:
-	struct Syntax
-	{
-		std::vector<TokenType> preceding;
-		std::vector<TokenType> subsequent;
-	};
+	std::vector<Token> getStatement();
+	bool parseStatement(std::vector<Token> expr);
+	bool parseFunctionDef(std::vector<Token> expr);
+	bool parseVarDef(std::vector<Token> expr);
 	Lexer lex;
 	x86Generator gen;
-
-	std::unordered_map<TokenType, Syntax> syntaxDef = {
-		{TokenType::Identifier, //Token-Type for which the Syntax applies to
-			{{TokenType::Equals}, //all relevant preceding Tokens
-			{TokenType::Colon, TokenType::Equals}}, //all possible subsequent Tokens
-		},
-
-		{TokenType::Exit, //Token-Type
-			{{}, //preceding
-			{TokenType::Identifier, TokenType::Number}}, //subsequent
-		},
-
-		{TokenType::Equals, //Token-Type
-			{{TokenType::Identifier}, //preceding
-			{TokenType::Identifier, TokenType::Number}}, //subsequent
-		}
-	};
 };
 

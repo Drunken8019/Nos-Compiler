@@ -1,5 +1,6 @@
-main:
-	exit 99;
-	
-	
-	
+def main()
+{
+	let var2 = 11;
+	let var3 = var2;
+	exit 22;
+}

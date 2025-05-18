@@ -28,12 +28,22 @@ void x86Generator::printAsm(std::string s)
 
 void x86Generator::startMatching(Lexer l)
 {
-	while (l.hasNext)
+	Token curToken = l.nextToken();
+	std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
+	Token prevToken;
+	std::string toPrint = "";
+	std::vector<Token> tkInCurExpr;
+	bool syntaxMatching = true;
+	bool useSaved = false;
+	bool lookBack = false;
+	std::vector<Token> saved;
+	int count = 0;
+
+	while (curToken.type != TokenType::COMPILER_EOF)
 	{
-		std::string toPrint = "";
-		Token curToken = l.nextToken();
-		std::vector<Token> tkInCurExpr;
-		bool syntaxMatching = true;
+		//prevToken = curToken;
+		saved.push_back(curToken);
+
 		for(SyntaxTemplate t : syntax)
 		{
 			for (Snippet s : t.def)
@@ -42,23 +52,76 @@ void x86Generator::startMatching(Lexer l)
 				{
 					if (curToken.type == s.getType())
 					{
-						if (curToken.type == TokenType::COMPILER_EOF) { std::cout << "Unexpected eof"; return; } //---DEBUG
+						lookBack = true;
 						syntaxMatching = true;
 						tkInCurExpr.push_back(curToken);
-						curToken = l.nextToken();
+						if (useSaved && !saved.size()>count) { curToken = saved.at(count); count++; }
+						else { curToken = l.nextToken(); saved.push_back(curToken); }
+						std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 					}
 					else
 					{
-						if (curToken.type == TokenType::COMPILER_EOF) { std::cout << "Unexpected eof"; return; } //---DEBUG
+						if (curToken.type != TokenType::COMPILER_EOF)
+						{
+							//curToken = prevToken;
+							if (saved.size() > count && lookBack)
+							{
+								useSaved = true;
+								curToken = saved.at(count);
+								count++;
+							}
+							if (saved.size() < count) useSaved = false;
+						}
 						syntaxMatching = false;
-						curToken = l.nextToken();
 						break;
 					}
 				}
+				count = 0;
 			}
-			if (syntaxMatching) toPrint = t.x86Code(tkInCurExpr);
+			if (syntaxMatching) toPrint = x86Generator::x86Code(tkInCurExpr, t);
 			tkInCurExpr.clear();
+			if (!toPrint.empty() && syntaxMatching) { *out << toPrint; toPrint.clear(); break; }
 		}
-		if (!toPrint.empty()) *out << toPrint;
+		saved.clear();
+		useSaved = false;
 	}
+}
+
+std::string x86Generator::x86Code(std::vector<Token> tokens, SyntaxTemplate t)
+{
+	if (t.type == SyntaxType::VarDef)
+	{
+		varTable.insert({ tokens.at(1).value, variableCounter });
+		variableCounter++;
+	}
+	std::string result = "";
+	Token curToken;
+	for (Option o : t.CTemplate.indexedx86Code)
+	{
+		switch (o.isString)
+		{
+		case true:
+			result.append(o.getx86Code());
+			break;
+		case false:
+			curToken = tokens.at(o.getIndex());
+			if(curToken.type == TokenType::Identifier && t.type != SyntaxType::Function)
+			{
+				auto varRes = varTable.find(curToken.value);
+				if (varRes != varTable.end())
+				{
+					int varOffset = (variableCounter - varRes->second) * 4;
+					result.append("[ESP+");
+					result.append(std::to_string(varOffset));
+					result.append("]");
+				}
+			}
+			else
+			{
+				result.append(curToken.value);
+			}
+			break;
+		}
+	}
+	return result;
 }

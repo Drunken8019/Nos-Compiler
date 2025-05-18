@@ -1,5 +1,16 @@
 #include "Lexer.h"
 bool isOnlyWhitespace(const std::string& str);
+
+void Lexer::saveToken(Token t) 
+{
+	readBuffer.push(t);
+}
+
+void Lexer::clearSaveBuffer()
+{
+	readBuffer = std::queue<Token>();
+}
+
 Lexer::Lexer()
 {
 	this->in = NULL;
@@ -13,28 +24,31 @@ Lexer::Lexer(std::ifstream* i)
 Token Lexer::nextToken()
 {
 	std::string curLine;
-	if(tokenBuffer.empty() && hasNext)
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+	if(useSaveBuffer && !readBuffer.empty())
+	{
+		result = readBuffer.front();
+		readBuffer.pop();
+		return result;
+	}
+
+	if(tokenBuffer.empty())
 	{
 		do
 		{
 			if (!std::getline(*in, curLine)) 
 			{
-				hasNext = false;
 				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
 			}
 			loc.line++;
 		} while (curLine.empty() || isOnlyWhitespace(curLine));
 		Lexer::loadTokens(curLine);
 	}
-	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+
 	if(!tokenBuffer.empty())
 	{
 		result = tokenBuffer.front();
 		tokenBuffer.pop();
-	}
-	if (!in->good() && tokenBuffer.empty())
-	{
-		hasNext = false;
 	}
 	return result;
 }
@@ -42,24 +56,28 @@ Token Lexer::nextToken()
 Token Lexer::peek()
 {
 	std::string curLine;
-	if (tokenBuffer.empty() && hasNext)
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+	if (useSaveBuffer && !readBuffer.empty())
+	{
+		result = readBuffer.front();
+		return result;
+	}
+
+	if (tokenBuffer.empty())
 	{
 		do
 		{
 			if (!std::getline(*in, curLine)) 
 			{
-				hasNext = false;
 				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
 			}
 			loc.line++;
 		} while (curLine.empty() || isOnlyWhitespace(curLine));
 		Lexer::loadTokens(curLine);
 	}
-	if (!in->good() && tokenBuffer.empty())
-	{
-		hasNext = false;
-	}
-	return tokenBuffer.front();
+
+	if (!tokenBuffer.empty()) result = tokenBuffer.front();
+	return result;
 }
 
 bool Lexer::loadTokens(std::string curLine)
