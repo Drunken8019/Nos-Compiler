@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 			tm end;
 			localtime_s(&end, &stamp);
 			int took = end.tm_sec - start.tm_sec;
-			cout << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
+			cout << std::endl << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
 		}
 		else cout << "Wrong file type. Correct extension: .nir";
 	}

@@ -27,7 +27,9 @@ std::string x86Generator::resolveIdent(Token t)
 	}
 	else
 	{
-		std::cout << "Symbol not recognized. At line " << t.loc.line << ", col " << t.loc.column << std::endl;
+		std::cout << std::endl;
+		std::cout << "Symbol \"" << t.value << "\" not recognized" << std::endl;
+		std::cout << "- Occured at line " << t.loc.line << ", column " << t.loc.column << std::endl;
 	}
 	return result;
 }

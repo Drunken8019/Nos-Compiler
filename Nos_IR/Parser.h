@@ -36,6 +36,7 @@ public:
 	bool parseVarAsign(std::vector<Token> stmnt);
 	bool compExpr(std::vector<Token> expr, std::string x86Dest, Token dest);
 	bool compSMA(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand);
+	void printErrorMsg(std::string msg, Token t);
 	bool parseExit(std::vector<Token> stmnt); //Will probably be removed
 	Lexer lex;
 	x86Generator gen = x86Generator();
