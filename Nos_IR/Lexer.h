@@ -4,10 +4,14 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+#include <algorithm>
+#include <cctype>
 
 enum TokenType
 {
-	Identifier, Exit, Number, Colon
+	COMPILER_EOF, COMPILER_EMPTY,
+	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Plus, Minus, Mult, Div,
+	Let, Define, Identifier, Exit, Number,
 };
 
 struct Location
@@ -27,22 +31,36 @@ class Lexer
 public:
 	Lexer();
 	Lexer(std::ifstream* i);
-	bool hasNext = true;
 	Token nextToken();
 	Token peek();
+	void saveToken(Token t);
+	void clearSaveBuffer();
+	bool useSaveBuffer = false;
 
 private:
 	bool loadTokens(std::string curLine);
 	std::ifstream* in;
 	Location loc = { 0, 0 };
 	std::queue<Token> tokenBuffer;
+	std::queue<Token> readBuffer;
 
 	std::unordered_map<std::string, TokenType> keywords = {
 		{"exit", TokenType::Exit},
+		{"let", TokenType::Let},
+		{"def", TokenType::Define},
 	};
 
-	std::unordered_map<std::string, TokenType> symbols = {
-		{":", TokenType::Colon}
+	std::unordered_map<char, TokenType> symbols = {
+		{'{', TokenType::LCBrace},
+		{'}', TokenType::RCBrace},
+		{'(', TokenType::LParen},
+		{')', TokenType::RParen},
+		{'=', TokenType::Equals},
+		{';', TokenType::Semicolon},
+		{'+', TokenType::Plus},
+		{'-', TokenType::Minus},
+		{'*', TokenType::Mult},
+		{'/', TokenType::Div},
 	};
 };
 

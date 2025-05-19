@@ -1,4 +1,6 @@
-main:
-	exit 69
-	call xyz
-	return
+def main()
+{
+	let a = 10;
+	a = a + 10;
+	exit a;
+}

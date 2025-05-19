@@ -1,8 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <vector>
-#include "Lexer.h"
+#include <ctime>
+#include "Parser.h"
 using namespace std;
 
 void temp_compile(char* src);
@@ -18,9 +18,16 @@ int main(int argc, char* argv[])
 	{
 		if (checkExtension(argv[1]))
 		{
-			cout << "---Starting---" << endl;
+			time_t stamp = time(NULL);
+			tm start;
+			localtime_s(&start, &stamp);
+			cout << "Started at " << start.tm_hour << ":" << start.tm_min << ":" << start.tm_sec << endl;
 			temp_compile(argv[1]);
-			cout << "---Finished---" << endl;
+			stamp = time(NULL);
+			tm end;
+			localtime_s(&end, &stamp);
+			int took = end.tm_sec - start.tm_sec;
+			cout << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
 		}
 		else cout << "Wrong file type. Correct extension: .nir";
 	}
@@ -32,27 +39,18 @@ void temp_compile(char* src)
 {
 	ifstream in;
 	in.open(src);
-	Lexer l = { &in };
+	/*Lexer l = {&in};
 	Token temp;
 	while(l.hasNext)
 	{
 		temp = l.nextToken();
 		cout << temp.value << "\t" << temp.type << "\t" << temp.loc.line << " : " << temp.loc.column << endl;
-	}
+	}*/
 	ofstream out;
 	out.open("E:/Nos_IR/default.asm");
-
-	out << 
-		"global main\n"
-		"extern ExitProcess\n"
-		"section .bss\n"
-		"section .data\n"
-		"section .text\n"
-		"main:\n";
-
-	in.close();
-	out.flush();
-	out.close();
+	
+	Parser p = { &in, &out };
+	p.parse();
 }
 
 bool checkExtension(char* s)

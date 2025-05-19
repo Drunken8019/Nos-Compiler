@@ -1,4 +1,15 @@
 #include "Lexer.h"
+bool isOnlyWhitespace(const std::string& str);
+
+void Lexer::saveToken(Token t) 
+{
+	readBuffer.push(t);
+}
+
+void Lexer::clearSaveBuffer()
+{
+	readBuffer = std::queue<Token>();
+}
 
 Lexer::Lexer()
 {
@@ -13,64 +24,70 @@ Lexer::Lexer(std::ifstream* i)
 Token Lexer::nextToken()
 {
 	std::string curLine;
-	if(tokenBuffer.empty() && hasNext)
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+	if(useSaveBuffer && !readBuffer.empty())
+	{
+		result = readBuffer.front();
+		readBuffer.pop();
+		return result;
+	}
+
+	if(tokenBuffer.empty())
 	{
 		do
 		{
 			if (!std::getline(*in, curLine)) 
 			{
-				hasNext = false;
-				return { TokenType::Identifier, "EOF!", {0, 0} };
+				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
 			}
 			loc.line++;
-		} while (curLine.empty());
+		} while (curLine.empty() || isOnlyWhitespace(curLine));
 		Lexer::loadTokens(curLine);
 	}
-	if(!in->good())
+
+	if(!tokenBuffer.empty())
 	{
-		hasNext = false;
+		result = tokenBuffer.front();
+		tokenBuffer.pop();
 	}
-	Token result = tokenBuffer.front();
-	tokenBuffer.pop();
 	return result;
 }
 
 Token Lexer::peek()
 {
 	std::string curLine;
-	if (tokenBuffer.empty() && hasNext)
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+	if (useSaveBuffer && !readBuffer.empty())
+	{
+		result = readBuffer.front();
+		return result;
+	}
+
+	if (tokenBuffer.empty())
 	{
 		do
 		{
 			if (!std::getline(*in, curLine)) 
 			{
-				hasNext = false;
-				return { TokenType::Identifier, "EOF!", {0, 0} };
+				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
 			}
 			loc.line++;
-		} while (curLine.empty());
+		} while (curLine.empty() || isOnlyWhitespace(curLine));
 		Lexer::loadTokens(curLine);
 	}
-	if (!in->good())
-	{
-		hasNext = false;
-	}
-	return tokenBuffer.front();
+
+	if (!tokenBuffer.empty()) result = tokenBuffer.front();
+	return result;
 }
 
 bool Lexer::loadTokens(std::string curLine)
 {
 	for (int i = 0; i < curLine.length(); i++)
 	{
-		switch (curLine[i])
+		auto sFound = symbols.find(curLine[i]);
+		if (sFound != symbols.end()) tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+		else
 		{
-		case ' ':
-			break;
-
-		case ':':
-			tokenBuffer.push({ TokenType::Colon, ":", {loc.line, i + 1}});
-			break;
-		default:
 			if (std::isdigit(curLine[i]))
 			{
 				std::string temp;
@@ -81,7 +98,7 @@ bool Lexer::loadTokens(std::string curLine)
 					if (i >= curLine.length()) break;
 				}
 				i--;
-				tokenBuffer.push({ TokenType::Number, temp, {loc.line, i+1} });
+				tokenBuffer.push({ TokenType::Number, temp, {loc.line, i + 1} });
 			}
 			else if (std::isalpha(curLine[i]))
 			{
@@ -93,12 +110,17 @@ bool Lexer::loadTokens(std::string curLine)
 					if (i >= curLine.length()) break;
 				}
 				i--;
-				auto it = keywords.find(temp);
-				if (it != keywords.end()) tokenBuffer.push({ it->second, temp, {loc.line, i + 1} });
+				auto kFound = keywords.find(temp);
+				if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
 				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
 			}
-			break;
 		}
 	}
 	return true;
+}
+
+bool isOnlyWhitespace(const std::string& str) {
+	return std::all_of(str.begin(), str.end(), [](unsigned char c) {
+		return std::isspace(c);
+	});
 }
