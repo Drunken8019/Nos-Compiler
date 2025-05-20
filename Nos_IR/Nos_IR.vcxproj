@@ -133,6 +133,7 @@
     <ClCompile Include="x86Generator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Data.h" />
     <ClInclude Include="Lexer.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="x86Generator.h" />

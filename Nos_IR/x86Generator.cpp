@@ -10,19 +10,30 @@ x86Generator::x86Generator(std::ofstream* out)
 	this->out = out;
 }
 
-int x86Generator::calcVarOffset(int offset)
+int x86Generator::calcVarOffset(int offset, int scope, std::vector<int> scopes)
 {
-	return (offset * 8);
+	int scopeOff = sumVector(scopes, scopes.size() - scope);
+	return (offset * 8) + scopeOff;
 }
 
-std::string x86Generator::resolveIdent(Token t, std::unordered_map<std::string, int> varTable)
+int x86Generator::sumVector(std::vector<int> v, int end)
+{
+	int result = 0;
+	for(int i=0;i<=end;i++)
+	{
+		result += v[i];
+	}
+	return result;
+}
+
+std::string x86Generator::resolveIdent(Token t, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
 	std::string result = "";
 	auto f = varTable.find(t.value);
 	if (f != varTable.end())
 	{
 		result.append("[rsp+");
-		result.append(std::to_string(calcVarOffset(f->second)));
+		result.append(std::to_string(calcVarOffset(f->second.count, f->second.scopeElevation, scopes)));
 		result.append("]");
 	}
 	else
@@ -50,72 +61,72 @@ void x86Generator::printAsm(std::string s)
 	//out->write(s.c_str(), s.length()-1);
 }
 
-void x86Generator::printMov(Token des, Token src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printMov(Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
 	if(src.type == TokenType::Number)
 	{
-		printMov(resolveIdent(des, varTable), src.value, "qword", varTable);
+		printMov(resolveIdent(des, varTable, scopes), src.value, "qword", varTable, scopes);
 	}
 	else if(src.type == TokenType::Identifier)
 	{
-		printMov("r11", resolveIdent(src, varTable), "", varTable);
-		printMov(resolveIdent(des, varTable), "r11", "", varTable);
+		printMov("r11", resolveIdent(src, varTable, scopes), "", varTable, scopes);
+		printMov(resolveIdent(des, varTable, scopes), "r11", "", varTable, scopes);
 	}
 	else if (src.type == TokenType::Function)
 	{
-		printMov(resolveIdent(des, varTable), "rax", "qword", varTable);
+		printMov(resolveIdent(des, varTable, scopes), "rax", "qword", varTable, scopes);
 	}
 }
-void x86Generator::printMov(Token des, std::string src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printMov(Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
-	printMov(resolveIdent(des, varTable), src, "qword", varTable);
+	printMov(resolveIdent(des, varTable, scopes), src, "qword", varTable, scopes);
 }
-void x86Generator::printMov(std::string des, Token src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printMov(std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
-	if (src.type == TokenType::Identifier) printMov(des, resolveIdent(src, varTable), "qword", varTable);
+	if (src.type == TokenType::Identifier) printMov(des, resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
 	else if (src.type == TokenType::Function)
 	{
-		printMov(des, "rax", "qword", varTable);
+		printMov(des, "rax", "qword", varTable, scopes);
 	}
-	else printMov(des, src.value, "qword", varTable);
+	else printMov(des, src.value, "qword", varTable, scopes);
 }
-void x86Generator::printMov(std::string des, std::string src, std::string type, std::unordered_map<std::string, int> varTable)
+void x86Generator::printMov(std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
 	if (!type.empty()) type.append(" ");
 	*out << "mov " << type << des << ", " << src << std::endl;
 }
 
-void x86Generator::printAddSubMul(std::string x86Operand, Token des, Token src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printAddSubMul(std::string x86Operand, Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
 	if (src.type == TokenType::Number)
 	{
-		printAddSubMul(x86Operand, resolveIdent(des, varTable), src.value, "qword", varTable);
+		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), src.value, "qword", varTable, scopes);
 	}
 	else if (src.type == TokenType::Identifier)
 	{
-		printMov("r11", resolveIdent(src, varTable), "qword", varTable);
-		printAddSubMul(x86Operand, resolveIdent(des, varTable), "r11", "qword", varTable);
-		printMov(resolveIdent(des, varTable), "r11", "qword", varTable);
+		printMov("r11", resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
+		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), "r11", "qword", varTable, scopes);
+		printMov(resolveIdent(des, varTable, scopes), "r11", "qword", varTable, scopes);
 	}
 	else if(src.type == TokenType::Function)
 	{
-		printAddSubMul(x86Operand, resolveIdent(des, varTable), "rax", "qword", varTable);
+		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), "rax", "qword", varTable, scopes);
 	}
 }
-void x86Generator::printAddSubMul(std::string x86Operand, Token des, std::string src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printAddSubMul(std::string x86Operand, Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
-	printAddSubMul(x86Operand, resolveIdent(des, varTable), src, "qword", varTable);
+	printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), src, "qword", varTable, scopes);
 }
-void x86Generator::printAddSubMul(std::string x86Operand, std::string des, Token src, std::unordered_map<std::string, int> varTable)
+void x86Generator::printAddSubMul(std::string x86Operand, std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
-	if (src.type == TokenType::Identifier) printAddSubMul(x86Operand, des, resolveIdent(src, varTable), "qword", varTable);
+	if (src.type == TokenType::Identifier) printAddSubMul(x86Operand, des, resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
 	else if (src.type == TokenType::Function)
 	{
-		printAddSubMul(x86Operand, des, "rax", "qword", varTable);
+		printAddSubMul(x86Operand, des, "rax", "qword", varTable, scopes);
 	}
-	else printAddSubMul(x86Operand, des, src.value, "qword", varTable);
+	else printAddSubMul(x86Operand, des, src.value, "qword", varTable, scopes);
 }
-void x86Generator::printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type, std::unordered_map<std::string, int> varTable)
+void x86Generator::printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
 {
 	if (!type.empty()) type.append(" ");
 	*out << x86Operand << " " << type << des << ", " << src << std::endl;

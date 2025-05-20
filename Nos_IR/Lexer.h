@@ -6,26 +6,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cctype>
-
-enum TokenType
-{
-	COMPILER_EOF, COMPILER_EMPTY,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Plus, Minus, Mult, Div,
-	Let, Define, Identifier, Exit, Return, 
-	Function, Number
-};
-
-struct Location
-{
-	int line, column;
-};
-
-struct Token
-{
-	TokenType type;
-	std::string value;
-	Location loc;
-};
+#include "Data.h"
 
 class Lexer
 {

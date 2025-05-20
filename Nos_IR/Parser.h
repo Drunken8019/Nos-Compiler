@@ -10,42 +10,20 @@ public:
 	void parse();
 
 //private:
-	template<typename T> class Expression
-	{
-	public:
-		bool lSet = false, rSet = false, opSet = false;
-		T left;
-		Token operand;
-		T right;
 
-		void setLeft(T l) { left = l; lSet = true; }
-		void setRight(T r) { left = r; rSet = true; }
-		void setOp(Token o) { operand = o; opSet = true; }
-	};
-
-	struct Variable
-	{
-		Token val;
-		int count;
-		int scopeElevation;
-	};
-
-	//std::unordered_map<std::string, int> varTable;
 	Token emptyTok = { TokenType::COMPILER_EMPTY, "", {0, 0} };
 
 	std::vector<Token> getStatement();
-	//int calcVarOffset(int offset);
-	//std::string resolveIdent(Token t);
-	bool parseStatement(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int* parCount);
-	bool parseFunctionDef(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int* parCount);
-	bool parseVarDef(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int* parCount);
-	bool parseFunctionCall(Token call, std::unordered_map<std::string, int> parScope);
-	bool parseFuncReturn(std::vector<Token> stmnt, std::unordered_map<std::string, int> parScope);
-	bool parseVarAsign(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope);
-	bool compExpr(std::vector<Token> expr, std::string x86Dest, Token dest, std::unordered_map<std::string, int> parScope);
-	bool compTAC(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand, std::unordered_map<std::string, int> parScope);
+	bool parseStatement(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int* parCount, int scopeCount, std::vector<int>* scopes);
+	bool parseFunctionDef(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int* parCount, int scopeCount, std::vector<int>* scopes);
+	bool parseVarDef(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int* parCount, int scopeCount, std::vector<int> scopes);
+	bool parseFunctionCall(Token call, std::unordered_map<std::string, Variable> parScope, std::vector<int> scopes);
+	bool parseFuncReturn(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes);
+	bool parseVarAsign(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int scopeCount, std::vector<int> scopes);
+	bool compExpr(std::vector<Token> expr, std::string x86Dest, Token dest, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes);
+	bool compTAC(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes);
 	void printErrorMsg(std::string msg, Token t);
-	bool parseExit(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope); //Will probably be removed
+	bool parseExit(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int scopeCount, std::vector<int> scopes); //Will probably be removed
 	Lexer lex;
 	x86Generator gen = x86Generator();
 };
