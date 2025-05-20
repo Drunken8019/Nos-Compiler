@@ -3,7 +3,13 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-
+# Ignore Testing files
+default.asm
+default.obj
+default.exe
+test.nir
+asm_auto.bat
+commands.txt
 
 # User-specific files
 *.rsuser
