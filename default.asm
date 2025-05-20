@@ -5,21 +5,33 @@ section .data
 section .text
 main:
 sub rsp, 360
-mov qword [rsp+0], 10
-mov qword rdx, [rsp+0]
-add qword rdx, 10
-mov qword [rsp+0], rdx
-mov qword [rsp+16], 100
 call fun
-mov qword rdx, [rsp+16]
-add qword rdx, 10
-mov qword [rsp+16], rdx
-mov qword rdx, [rsp+0]
-add qword rdx, [rsp+16]
-mov qword rcx, rdx
+mov qword [rsp+8], rax
+fun3:
+sub rsp, 320
+mov qword [rsp+8], 10
+add rsp, 320
+ret
+
+mov qword rcx, [rsp+8]
 call ExitProcess
+add rsp, 320
 ret
 
 fun:
+sub rsp, 320
+mov qword [rsp+8], 100
+mov qword [rsp], 10
+call fun2
+add qword [rsp], rax
+mov qword rax, [rsp]
+add rsp, 320
+ret
+
+fun2:
+sub rsp, 320
+mov qword [rsp], 30
+mov qword rax, [rsp]
+add rsp, 320
 ret
 

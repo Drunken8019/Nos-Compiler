@@ -7,34 +7,13 @@ Parser::Parser(std::ifstream* in, std::ofstream* out)
 	this->gen = { out };
 }
 
-/*int Parser::calcVarOffset(int offset)
-{
-	return (offset * 8);
-}
-
-std::string Parser::resolveIdent(Token t)
-{
-	std::string result = "";
-	auto f = varTable.find(t.value);
-	if (f != varTable.end())
-	{
-		result.append("[rsp+");
-		result.append(std::to_string(calcVarOffset(f->second)));
-		result.append("]");
-	}
-	else
-	{
-		std::cout << "Symbol not recognized. At line " << t.loc.line << ", col " << t.loc.column << std::endl;
-	}
-	return result;
-}*/
-
 std::vector<Token> Parser::getStatement()
 {
 	Token curToken = lex.nextToken();
 	std::vector<Token> result;
 	while (curToken.type != TokenType::COMPILER_EOF)
 	{
+		std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 		switch (curToken.type)
 		{
 		case TokenType::LCBrace:
@@ -51,7 +30,6 @@ std::vector<Token> Parser::getStatement()
 
 		default:
 			result.push_back(curToken);
-			//std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 			curToken = lex.nextToken();
 		}
 	}
@@ -66,47 +44,58 @@ void Parser::parse()
 
 	while(!stmnt.empty())
 	{
-		identified = parseStatement(stmnt);
+		identified = parseStatement(stmnt, {}, nullptr);
 		stmnt = getStatement();
 	}
 	
 }
 
-bool Parser::parseStatement(std::vector<Token> stmnt)
+bool Parser::parseStatement(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int *parCount)
 {
 	bool valid = true;
 	switch (stmnt[0].type)
 	{
 	case TokenType::Define:
-		valid = parseFunctionDef(stmnt);
+		valid = parseFunctionDef(stmnt, parScope, parCount);
 		break;
 
 	case TokenType::Let:
-		valid = parseVarDef(stmnt);
+		valid = parseVarDef(stmnt, parScope, parCount);
 		break;
 
 	case TokenType::Identifier:
-		if (parseFunctionCall(stmnt)) valid = true;
-		else if (parseVarAsign(stmnt)) valid = true;
-		else valid = false;
+		valid = parseVarAsign(stmnt, parScope);
+		break;
+
+	case TokenType::Function:
+		valid = parseFunctionCall(stmnt[0], *parScope);
+		break;
+
+	case TokenType::Return:
+		valid = parseFuncReturn(stmnt, *parScope);
 		break;
 
 	case TokenType::Exit:
-		valid = parseExit(stmnt);
+		valid = parseExit(stmnt, parScope);
 		break;
 	}
 	return valid;
 }
 
-bool Parser::parseFunctionDef(std::vector<Token> stmnt)
+bool Parser::parseFunctionDef(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int *parCount)
 {
 	bool paramListClosed = false;
 	bool functionBodyClosed = false;
-	
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return false; }
-	else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return false; }
+	std::unordered_map<std::string, int> varTable;
+	int varCount = 1;
+	if (parCount != nullptr) { varCount = *parCount; }
+	if (parScope != nullptr) { varTable = *parScope; }
 
-	int i = 3;
+	if (stmnt[1].type != TokenType::Function) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return false; }
+	//else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return false; }
+
+	//int i = 3;
+	int i = 2;
 	for(; i<stmnt.size(); i++)
 	{
 		//TODO: Compute param expr
@@ -125,7 +114,8 @@ bool Parser::parseFunctionDef(std::vector<Token> stmnt)
 	if (stmnt[1].value == "main") //DEBUG, will be rmeoved
 	{
 		gen.printAsm("sub rsp, 360\n"); 
-	} 
+	}
+	else { gen.printAsm("sub rsp, 320\n"); }
 
 	std::vector<Token> nextStmnt = getStatement();
 	while(!nextStmnt.empty())
@@ -135,77 +125,124 @@ bool Parser::parseFunctionDef(std::vector<Token> stmnt)
 			functionBodyClosed = true;
 			break;
 		}
-		parseStatement(nextStmnt);
+		parseStatement(nextStmnt, &varTable, &varCount);
 		nextStmnt = getStatement();
 	}
 
 	if (!functionBodyClosed) { printErrorMsg("Expected \"}\"", nextStmnt.back()); return false; }
-	gen.printAsm("ret\n\n");
+	gen.printAsm("add rsp, 320\nret\n\n");
 	return true;
 }
 
-bool Parser::parseVarDef(std::vector<Token> stmnt)
+bool Parser::parseVarDef(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope, int *varCount)
 {
 	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return false; }
-	else if(gen.varTable.find(stmnt[1].value) != gen.varTable.end()) { printErrorMsg("\"" + stmnt[1].value + "\" is already defined", stmnt[1]); return false; }
+	else if(parScope->find(stmnt[1].value) != parScope->end()) { printErrorMsg("\"" + stmnt[1].value + "\" is already defined", stmnt[1]); return false; }
 	else if (stmnt[2].type == TokenType::Semicolon) 
 	{ 
-		gen.varTable.insert({ stmnt[1].value, varCount });
-		varCount++;
+		parScope->insert({ stmnt[1].value, *varCount });
+		*varCount += 1;
 		return true; 
 	}
 	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return false; }
 
-	gen.varTable.insert({ stmnt[1].value, varCount });
+	parScope->insert({ stmnt[1].value, *varCount });
 
 	std::vector<Token> expr;
 	expr.assign(stmnt.begin() + 3, stmnt.end() - 1);
 
-	compExpr(expr, "", stmnt[1]);
-	varCount++;
-	
+	compExpr(expr, "", stmnt[1], *parScope);
+	*varCount += 1;
 
 	return true;
 }
 
-bool Parser::parseFunctionCall(std::vector<Token> stmnt)
+bool Parser::parseFunctionCall(Token call, std::unordered_map<std::string, int> parScope)
 {
-	if (stmnt[1].type != TokenType::LParen) { return false; }
-	else if (stmnt[2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[2]); return false; }
-	gen.printAsm("call " + stmnt[0].value + "\n");
+	//TODO add a function Table
+	gen.printAsm("call " + call.value + "\n");
+	return true;
 }
 
-bool Parser::parseVarAsign(std::vector<Token> stmnt)
+bool Parser::parseVarAsign(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope)
 {
 	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return false; }
 	else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return false; }
 
 	std::vector<Token> expr;
 	expr.assign(stmnt.begin()+2, stmnt.end()-1);
-	compExpr(expr, "", stmnt[0]);
-	varCount++;
+	compExpr(expr, "", stmnt[0], *parScope);
+	//varCount++; why????
 }
 
-bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest)
+bool Parser::parseFuncReturn(std::vector<Token> stmnt, std::unordered_map<std::string, int> parScope)
 {
-	if(expr.size() == 1)
+	std::vector<Token> expr;
+	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
+
+	compExpr(expr, "[rsp]", emptyTok, parScope);
+	gen.printMov("rax", "[rsp]", "qword", parScope);
+	return true;
+}
+
+bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest, std::unordered_map<std::string, int> parScope)
+{
+	if (expr[0].type == TokenType::Function && expr.size() == 2)
 	{
-		if(!x86Dest.empty()) gen.printMov(x86Dest, expr[0]);
-		else gen.printMov(dest, expr[0]);
+		parseFunctionCall(expr[0], parScope);
+		//gen.printAsm("call " + expr[0].value + "\n");
+		if (!x86Dest.empty()) gen.printMov(x86Dest, "rax", "qword", parScope);
+		else gen.printMov(dest, "rax", parScope);
 		return true;
 	}
+
+	if(expr.size() == 1)
+	{
+		if(!x86Dest.empty()) gen.printMov(x86Dest, expr[0], parScope);
+		else gen.printMov(dest, expr[0], parScope);
+		return true;
+	}
+
 	//ONLY 3 Operator expr supported rn: left OPERATOR right
-	if (expr.size() > 3) { printErrorMsg("ONLY 3 Operator expr supported: left OPERATOR right", expr[0]); return false; }
-	switch(expr[1].type)
+	//if (expr.size() > 3) { printErrorMsg("ONLY 3 Operator expr supported: left OPERATOR right", expr[0]); return false; }
+	std::vector<Token> lr;
+	Token op = emptyTok;
+	for(Token t : expr)
+	{
+		if(t.type == TokenType::Function && lr.size() < 2)
+		{
+			lr.push_back(t);
+		}
+		else if (t.type == TokenType::Identifier && lr.size() < 2)
+		{
+			lr.push_back(t);
+		}
+		else if (t.type == TokenType::Number && lr.size() < 2)
+		{
+			lr.push_back(t);
+		}
+		else if (t.type == TokenType::Plus || t.type == TokenType::Minus || t.type == TokenType::Mult || t.type == TokenType::Div)
+		{
+			if(op.type == TokenType::COMPILER_EMPTY) op = t;
+			else
+			{
+				printErrorMsg("Only 1 Operand per expressions supported for now ", expr.front());
+				return false;
+			}
+		}
+	}
+
+	if (lr.size() != 2) { printErrorMsg("Only 2 Values and 1 Operand expressions supported for now ", expr.front()); return false; }
+	switch (op.type)
 	{
 	case TokenType::Plus:
-		compSMA(expr[0], expr[2], x86Dest, dest, "add");
+		compTAC(lr[0], lr[1], x86Dest, dest, "add", parScope);
 		break;
 	case TokenType::Minus:
-		compSMA(expr[0], expr[2], x86Dest, dest, "sub");
+		compTAC(lr[0], lr[1], x86Dest, dest, "sub", parScope);
 		break;
 	case TokenType::Mult:
-		compSMA(expr[0], expr[2], x86Dest, dest, "imul");
+		compTAC(lr[0], lr[1], x86Dest, dest, "imul", parScope);
 		break;
 	case TokenType::Div:
 		break;
@@ -213,43 +250,31 @@ bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest)
 	return true;
 }
 
-bool Parser::compSMA(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand)
+bool Parser::compTAC(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand, std::unordered_map<std::string, int> parScope)
 {
-	//Potential optimization: e.g. 5+3 = 8, jus to fucking lazy rn
-	/*if (l.type == TokenType::Number && l.type == TokenType::Number)
+	if (!x86Dest.empty())
 	{
-		long int t = std::stol(l.value) + std::stol(r.value);
-		gen.printAsm("mov " + x86Dest + ", " + std::to_string(t));
+		if (l.type == TokenType::Function) parseFunctionCall(l, parScope);
+		gen.printMov(x86Dest, l, parScope);
+		if (r.type == TokenType::Function) parseFunctionCall(r, parScope);
+		gen.printAddSubMul(x86Operand, x86Dest, r, parScope); 
 	}
-	else
-	{
-		std::string lRes = l.value, rRes = r.value;
-		if (l.type == TokenType::Identifier) lRes = resolveIdent(l);
-		if (r.type == TokenType::Identifier) rRes = resolveIdent(r);
+	else 
+	{ 
+		if (l.type == TokenType::Function) parseFunctionCall(l, parScope);
+		gen.printMov(dest, l, parScope);
+		if (r.type == TokenType::Function) parseFunctionCall(r, parScope);
+		gen.printAddSubMul(x86Operand, dest, r, parScope); 
+	}
 
-		gen.printAsm("mov rdx, " + lRes);
-		gen.printAsm("add rdx, " + rRes);
-		gen.printAsm("mov " + x86Dest + "rdx");
-	}*/
-
-	/*std::string lRes = l.value, rRes = r.value;
-	if (l.type == TokenType::Identifier) lRes = resolveIdent(l);
-	if (r.type == TokenType::Identifier) rRes = resolveIdent(r);
-
-	gen.printAsm("\tmov rdx, " + lRes + "\n");*/
-
-	gen.printMov("rdx", l);
-	gen.printAddSubMul(x86Operand, "rdx", r);
-	if (!x86Dest.empty()) gen.printMov(x86Dest, "rdx", "qword");
-	else gen.printMov(dest, "rdx");
 	return true;
 }
 
-bool Parser::parseExit(std::vector<Token> stmnt)
+bool Parser::parseExit(std::vector<Token> stmnt, std::unordered_map<std::string, int> *parScope)
 {
 	std::vector<Token> expr;
 	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
-	compExpr({ expr }, "rcx", {});
+	compExpr({ expr }, "rcx", {}, *parScope);
 	gen.printAsm("call ExitProcess\n");
 	return true;
 }

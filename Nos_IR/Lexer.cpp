@@ -109,10 +109,17 @@ bool Lexer::loadTokens(std::string curLine)
 					i++;
 					if (i >= curLine.length()) break;
 				}
-				i--;
-				auto kFound = keywords.find(temp);
-				if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
-				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
+				if(curLine[i] == '(')
+				{
+					tokenBuffer.push({ TokenType::Function, temp, {loc.line, i} });
+				}
+				else 
+				{
+					i--;
+					auto kFound = keywords.find(temp);
+					if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
+					else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
+				}
 			}
 		}
 	}

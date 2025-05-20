@@ -2,11 +2,6 @@
 #include <fstream>
 #include "Lexer.h"
 
-enum CTemplates
-{
-	Function, VarDef, ExitProc
-};
-
 class x86Generator
 {
 public:
@@ -41,18 +36,17 @@ public:
 	x86Generator(std::ofstream* out);
 
 	int calcVarOffset(int offset);
-	std::string resolveIdent(Token t);
-	std::unordered_map<std::string, int> varTable;
+	std::string resolveIdent(Token t, std::unordered_map<std::string, int> varTable);
 
 	void printAsm(std::string s);
 	void printDefaultHeader();
-	void printMov(Token des, Token src);
-	void printMov(Token des, std::string src);
-	void printMov(std::string des, Token src);
-	void printMov(std::string des, std::string src, std::string type);
+	void printMov(Token des, Token src, std::unordered_map<std::string, int> varTable);
+	void printMov(Token des, std::string src, std::unordered_map<std::string, int> varTable);
+	void printMov(std::string des, Token src, std::unordered_map<std::string, int> varTable);
+	void printMov(std::string des, std::string src, std::string type, std::unordered_map<std::string, int> varTable);
 
-	void printAddSubMul(std::string x86Operand, Token des, Token src);
-	void printAddSubMul(std::string x86Operand, Token des, std::string src);
-	void printAddSubMul(std::string x86Operand, std::string des, Token src);
-	void printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type);
+	void printAddSubMul(std::string x86Operand, Token des, Token src, std::unordered_map<std::string, int> varTable);
+	void printAddSubMul(std::string x86Operand, Token des, std::string src, std::unordered_map<std::string, int> varTable);
+	void printAddSubMul(std::string x86Operand, std::string des, Token src, std::unordered_map<std::string, int> varTable);
+	void printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type, std::unordered_map<std::string, int> varTable);
 };

@@ -11,7 +11,8 @@ enum TokenType
 {
 	COMPILER_EOF, COMPILER_EMPTY,
 	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Plus, Minus, Mult, Div,
-	Let, Define, Identifier, Exit, Number, Dih
+	Let, Define, Identifier, Exit, Return, 
+	Function, Number
 };
 
 struct Location
@@ -48,7 +49,7 @@ private:
 		{"exit", TokenType::Exit},
 		{"let", TokenType::Let},
 		{"def", TokenType::Define},
-		{"dih", TokenType::Dih},
+		{"return", TokenType::Return},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
