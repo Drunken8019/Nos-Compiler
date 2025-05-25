@@ -109,17 +109,10 @@ bool Lexer::loadTokens(std::string curLine)
 					i++;
 					if (i >= curLine.length()) break;
 				}
-				if(curLine[i] == '(')
-				{
-					tokenBuffer.push({ TokenType::Function, temp, {loc.line, i} });
-				}
-				else 
-				{
-					i--;
-					auto kFound = keywords.find(temp);
-					if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
-					else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
-				}
+				i--;
+				auto kFound = keywords.find(temp);
+				if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
+				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
 			}
 		}
 	}
@@ -127,7 +120,10 @@ bool Lexer::loadTokens(std::string curLine)
 }
 
 bool isOnlyWhitespace(const std::string& str) {
-	return std::all_of(str.begin(), str.end(), [](unsigned char c) {
-		return std::isspace(c);
-	});
+	
+	for(char c : str)
+	{
+		if (!std::isspace(c)) { return false; }
+	}
+	return true;
 }

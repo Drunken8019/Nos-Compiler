@@ -1,5 +1,4 @@
 #include "Parser.h"
-#include "x86Generator.h"
 
 Parser::Parser(std::ifstream* in, std::ofstream* out)
 {
@@ -38,259 +37,206 @@ std::vector<Token> Parser::getStatement()
 
 void Parser::parse() //When implementing OOP, this will be Class level... The parse Root will be moved 1 up then
 {
-	gen.printDefaultHeader();
-	bool identified = false;
+	ClassDefin root;
 	std::vector<int> scopes;
 	std::vector<Token> stmnt = getStatement();
-
-	while(!stmnt.empty())
-	{
-		identified = parseStatement(stmnt, {}, nullptr, 0, &scopes);
-		stmnt = getStatement();
-	}
+	if(stmnt.empty()) { printErrorMsg("Empty File", {TokenType::COMPILER_EOF, "", {0, 0}}); return; }
+	else if (stmnt[0].type != TokenType::ClassDef) { printErrorMsg("Definitions need to be contained within a class", stmnt[0]); return; }
+	root = parseClassDef(stmnt);
 	
+	resolveAST(&root);
+	gen.printAST(root);
 }
 
-bool Parser::parseStatement(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int *parCount, int scopeCount, std::vector<int>* scopes)
+bool Parser::resolveAST(ClassDefin* root)
 {
-	bool valid = true;
+	bool res = false;
+	for(Definition* d : root->defs)
+	{
+		res = d->resolve(&root->c);
+	}
+	return res;
+}
+
+ClassDefin Parser::parseClassDef(std::vector<Token> stmnt)
+{
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"class\"", stmnt[1]); return {errTok}; }
+	else if (stmnt[2].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt[1]); return {errTok}; }
+	//---------------------------- END ------------------------------
+
+	ClassDefin res = { stmnt[1] };
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
+
+		Definition* d = parseDefinition(nextStmnt);
+		//d->resolve(new Class()); SLICED
+		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
+		nextStmnt = getStatement();
+	}
+	return res;
+}
+
+Definition* Parser::parseDefinition(std::vector<Token> stmnt)
+{
 	switch (stmnt[0].type)
 	{
-	case TokenType::Define:
-		valid = parseFunctionDef(stmnt, parScope, parCount, scopeCount, scopes);
-		break;
-
 	case TokenType::Let:
-		valid = parseVarDef(stmnt, parScope, parCount, scopeCount, *scopes);
+	{
+		Definition* d = new VarDef(parseVarDef(stmnt));
+		
+		return d;
+		break;
+	}
+
+	case TokenType::Define:
+	{
+		Definition* d = new FuncDef(parseFunctionDef(stmnt));
+		//d->resolve(new Class()); SLICED
+		return d;
+		break;
+	}
+	default:
+		//-------------------- Syntax-Error handling --------------------
+		printErrorMsg("Only variable definitions or function definitions allowed", stmnt[0]);
+		//---------------------------- END ------------------------------
+		Definition* d = new Definition(errTok);
+		return d;
+		break;
+	}
+}
+
+FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
+{
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return { errTok }; }
+	else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return { errTok }; }
+	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
+	//---------------------------- END ------------------------------
+	Expression e;
+	FuncDef fd = { stmnt[1] };
+	for (int i = 3; i < stmnt.size(); i++)
+	{
+		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
+		{
+			e.tokens.push_back(stmnt[i]);
+		}
+		else
+		{
+			fd.params.push_back(e);
+		}
+		//fd.params.push_back(e);
+	}
+
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		fd.statements.push_back(s);
+		nextStmnt = getStatement();
+	}
+	//fd.resolve(new Class()); FINE
+	return fd;
+}
+
+Statement* Parser::parseStatement(std::vector<Token> stmnt)
+{
+	switch (stmnt[0].type)
+	{
+	case TokenType::Let:
+		return new VarDef(parseVarDef(stmnt));
 		break;
 
 	case TokenType::Identifier:
-		valid = parseVarAsign(stmnt, parScope, scopeCount, *scopes);
-		break;
-
-	case TokenType::Function:
-		valid = parseFunctionCall(stmnt[0], *parScope, *scopes);
+		if (stmnt[1].type == TokenType::LParen) return new FuncCall(parseFunctionCall(stmnt));
+		else return new VarAssign(parseVarAsign(stmnt));
 		break;
 
 	case TokenType::Return:
-		valid = parseFuncReturn(stmnt, *parScope, scopeCount, *scopes);
+		return new ReturnCall(parseFuncReturn(stmnt));
 		break;
-
-	case TokenType::Exit:
-		valid = parseExit(stmnt, parScope, scopeCount, *scopes);
-		break;
+	default:
+		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
 	}
-	return valid;
+	return new Statement(errTok);
 }
 
-bool Parser::parseFunctionDef(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int *parCount, int scopeCount, std::vector<int>* scopes)
+VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 {
-	bool paramListClosed = false;
-	bool functionBodyClosed = false;
-	std::unordered_map<std::string, Variable> varTable;
-	int varCount = 1;
-	//if (parCount != nullptr) { varCount = *parCount; }
-	if (parScope != nullptr) { varTable = *parScope; }
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return { {stmnt[1], 8}, {{errTok}} }; }
+	else if (stmnt[2].type == TokenType::Semicolon) 
+	{ 
+		return { {stmnt[1], 8}, {{emptyTok}} };
+	}
+	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return { {stmnt[1], 8}, {{errTok}} }; }
+	//---------------------------- END ------------------------------
+	Expression e;
+	int i = 3;
+	for(; i<stmnt.size(); i++)
+	{
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
+	}
+	return { {stmnt[1], 8}, e};
+}
 
+FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
+{
+	FuncCall fc = { stmnt[0] };
+	if (stmnt[2].type == TokenType::RParen) return fc;
 
-	if (stmnt[1].type != TokenType::Function) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return false; }
-	//else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return false; }
+	int i = 2;
+	Expression e;
+	for(; i<stmnt.size(); i++)
+	{
+		if(stmnt[i].type != TokenType::Comma)
+		{
+			e.tokens.push_back(stmnt[i]);
+		}
+		else
+		{
+			fc.params.push_back(e);
+		}
+	}
+	return fc;
+}
 
-	//int i = 3;
+VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
+{
+	
+	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
+	else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
+	Expression e;
+	VarAssign va = { stmnt[0], e };
 	int i = 2;
 	for(; i<stmnt.size(); i++)
 	{
-		//TODO: Compute param expr
-		if(stmnt[i].type == TokenType::RParen)
-		{
-			paramListClosed = true;
-			break;
-		}
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
 	}
-	if(!paramListClosed){ printErrorMsg("Expected \")\"", stmnt[i]); return false; }
-
-	if(i+1 < stmnt.size()) i++;
-	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt[i]); return false; }
-
-	gen.printAsm(stmnt[1].value + ":\n"); //TESTING
-	if (stmnt[1].value == "main") //DEBUG, will be rmeoved
-	{
-		gen.printAsm("sub rsp, 360\n"); 
-		scopes->push_back(0);
-	}
-	else 
-	{
-		gen.printAsm("sub rsp, 320\n"); 
-		scopes->push_back(320);
-	}
-
-	scopeCount += 1;
-
-	std::vector<Token> nextStmnt = getStatement();
-	while(!nextStmnt.empty())
-	{
-		if(nextStmnt.back().type == TokenType::RCBrace)
-		{
-			functionBodyClosed = true;
-			break;
-		}
-		parseStatement(nextStmnt, &varTable, &varCount, scopeCount, scopes);
-		nextStmnt = getStatement();
-	}
-
-	if (!functionBodyClosed) { printErrorMsg("Expected \"}\"", nextStmnt.back()); return false; }
-
-	scopes->pop_back();
-	scopeCount -= 1;
-	gen.printAsm("add rsp, 320\nret");
-	gen.printAsm("; " + std::to_string(scopeCount) + "\n\n"); //DEBUG
-	return true;
+	va.t = stmnt[0];
+	va.expr = e;
+	return va;
 }
 
-bool Parser::parseVarDef(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int *varCount, int scopeCount, std::vector<int> scopes)
+ReturnCall Parser::parseFuncReturn(std::vector<Token> stmnt)
 {
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return false; }
-	else if(parScope->find(stmnt[1].value) != parScope->end()) { printErrorMsg("\"" + stmnt[1].value + "\" is already defined", stmnt[1]); return false; }
-	else if (stmnt[2].type == TokenType::Semicolon) 
-	{ 
-		parScope->insert({ stmnt[1].value, {stmnt[1], *varCount, scopeCount} });
-		*varCount += 1;
-		return true; 
-	}
-	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return false; }
-
-	parScope->insert({ stmnt[1].value, {stmnt[1], *varCount, scopeCount} });
-
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin() + 3, stmnt.end() - 1);
-
-	compExpr(expr, "", stmnt[1], *parScope, scopeCount, scopes);
-	*varCount += 1;
-
-	return true;
-}
-
-bool Parser::parseFunctionCall(Token call, std::unordered_map<std::string, Variable> parScope, std::vector<int> scopes)
-{
-	//TODO add a function Table
-	gen.printAsm("call " + call.value + "\n");
-	return true;
-}
-
-bool Parser::parseVarAsign(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int scopeCount, std::vector<int> scopes)
-{
-	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return false; }
-	else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return false; }
-
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin()+2, stmnt.end()-1);
-	compExpr(expr, "", stmnt[0], *parScope, scopeCount, scopes);
-	//varCount++; why????
-	return true;
-}
-
-bool Parser::parseFuncReturn(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes)
-{
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
-
-	compExpr(expr, "[rsp]", emptyTok, parScope, scopeCount, scopes);
-	gen.printMov("rax", "[rsp]", "qword", parScope, scopes);
-	return true;
-}
-
-bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes)
-{
-	if (expr[0].type == TokenType::Function && expr.size() == 2)
+	Expression e;
+	ReturnCall rc = { stmnt[0], e };
+	for(int i = 1; i<stmnt.size(); i++)
 	{
-		parseFunctionCall(expr[0], parScope, scopes);
-		//gen.printAsm("call " + expr[0].value + "\n");
-		if (!x86Dest.empty()) gen.printMov(x86Dest, "rax", "qword", parScope, scopes);
-		else gen.printMov(dest, "rax", parScope, scopes);
-		return true;
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
 	}
-
-	if(expr.size() == 1)
-	{
-		if(!x86Dest.empty()) gen.printMov(x86Dest, expr[0], parScope, scopes);
-		else gen.printMov(dest, expr[0], parScope, scopes);
-		return true;
-	}
-
-	//ONLY 3 Operator expr supported rn: left OPERATOR right
-	//if (expr.size() > 3) { printErrorMsg("ONLY 3 Operator expr supported: left OPERATOR right", expr[0]); return false; }
-	std::vector<Token> lr;
-	Token op = emptyTok;
-	for(Token t : expr)
-	{
-		if(t.type == TokenType::Function && lr.size() < 2)
-		{
-			lr.push_back(t);
-		}
-		else if (t.type == TokenType::Identifier && lr.size() < 2)
-		{
-			lr.push_back(t);
-		}
-		else if (t.type == TokenType::Number && lr.size() < 2)
-		{
-			lr.push_back(t);
-		}
-		else if (t.type == TokenType::Plus || t.type == TokenType::Minus || t.type == TokenType::Mult || t.type == TokenType::Div)
-		{
-			if(op.type == TokenType::COMPILER_EMPTY) op = t;
-			else
-			{
-				printErrorMsg("Only 1 Operand per expressions supported for now ", expr.front());
-				return false;
-			}
-		}
-	}
-
-	if (lr.size() != 2) { printErrorMsg("Only 2 Values and 1 Operand expressions supported for now ", expr.front()); return false; }
-	switch (op.type)
-	{
-	case TokenType::Plus:
-		compTAC(lr[0], lr[1], x86Dest, dest, "add", parScope, scopeCount, scopes);
-		break;
-	case TokenType::Minus:
-		compTAC(lr[0], lr[1], x86Dest, dest, "sub", parScope, scopeCount, scopes);
-		break;
-	case TokenType::Mult:
-		compTAC(lr[0], lr[1], x86Dest, dest, "imul", parScope, scopeCount, scopes);
-		break;
-	case TokenType::Div:
-		break;
-	}
-	return true;
-}
-
-bool Parser::compTAC(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand, std::unordered_map<std::string, Variable> parScope, int scopeCount, std::vector<int> scopes)
-{
-	if (!x86Dest.empty())
-	{
-		if (l.type == TokenType::Function) parseFunctionCall(l, parScope, scopes);
-		gen.printMov(x86Dest, l, parScope, scopes);
-		if (r.type == TokenType::Function) parseFunctionCall(r, parScope, scopes);
-		gen.printAddSubMul(x86Operand, x86Dest, r, parScope, scopes);
-	}
-	else 
-	{ 
-		if (l.type == TokenType::Function) parseFunctionCall(l, parScope, scopes);
-		gen.printMov(dest, l, parScope, scopes);
-		if (r.type == TokenType::Function) parseFunctionCall(r, parScope, scopes);
-		gen.printAddSubMul(x86Operand, dest, r, parScope, scopes);
-	}
-
-	return true;
-}
-
-bool Parser::parseExit(std::vector<Token> stmnt, std::unordered_map<std::string, Variable> *parScope, int scopeCount, std::vector<int> scopes)
-{
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
-	compExpr({ expr }, "rcx", {}, *parScope, scopeCount, scopes);
-	gen.printAsm("call ExitProcess\n");
-	return true;
+	rc.expr = e;
+	return rc;
 }
 
 void Parser::printErrorMsg(std::string msg, Token t)

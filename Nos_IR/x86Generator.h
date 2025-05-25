@@ -1,31 +1,31 @@
 #pragma once
-#include <fstream>
-#include "Lexer.h"
-#include "Data.h"
+#include "Visitor.h"
 
-class x86Generator
+class x86Generator : public Visitor
 {
 public:
 	std::ofstream* out;
+	std::unordered_map<std::string, Variable> st;
+	std::unordered_map<std::string, Function> ft;
+	Function curFunc;
 
 
-	x86Generator();
-	x86Generator(std::ofstream* out);
+	x86Generator(){};
+	x86Generator(std::ofstream* o) : out(o) {};
 
-	int calcVarOffset(int offset, int scope, std::vector<int> scopes);
-	std::string resolveIdent(Token t, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	int sumVector(std::vector<int> v, int end);
+	bool printAST(ClassDefin root);
 
-	void printAsm(std::string s);
 	void printDefaultHeader();
 
-	void printMov(Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printMov(Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printMov(std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printMov(std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
+	void printMov(std::string type, std::string des, std::string src);
 
-	void printAddSubMul(std::string x86Operand, Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printAddSubMul(std::string x86Operand, Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printAddSubMul(std::string x86Operand, std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
-	void printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes);
+	void printAddSubMul(std::string x86Operand, std::string type, std::string des, std::string src);
+
+	void visit(Expression* node, std::string des) override;
+	void visit(VarAssign* node) override;
+	void visit(FuncCall* node) override;
+	void visit(ReturnCall* node) override;
+	void visit(ClassDefin* node) override;
+	void visit(VarDef* node) override;
+	void visit(FuncDef* node) override;
 };

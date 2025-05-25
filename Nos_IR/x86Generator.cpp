@@ -1,50 +1,5 @@
 #include "x86Generator.h"
 
-x86Generator::x86Generator()
-{
-	this->out = NULL;
-}
-
-x86Generator::x86Generator(std::ofstream* out)
-{
-	this->out = out;
-}
-
-int x86Generator::calcVarOffset(int offset, int scope, std::vector<int> scopes)
-{
-	int scopeOff = sumVector(scopes, scopes.size() - scope);
-	return (offset * 8) + scopeOff;
-}
-
-int x86Generator::sumVector(std::vector<int> v, int end)
-{
-	int result = 0;
-	for(int i=0;i<=end;i++)
-	{
-		result += v[i];
-	}
-	return result;
-}
-
-std::string x86Generator::resolveIdent(Token t, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	std::string result = "";
-	auto f = varTable.find(t.value);
-	if (f != varTable.end())
-	{
-		result.append("[rsp+");
-		result.append(std::to_string(calcVarOffset(f->second.count, f->second.scopeElevation, scopes)));
-		result.append("]");
-	}
-	else
-	{
-		std::cout << std::endl;
-		std::cout << "Symbol \"" << t.value << "\" not recognized" << std::endl;
-		std::cout << "- Occured at line " << t.loc.line << ", column " << t.loc.column << std::endl;
-	}
-	return result;
-}
-
 void x86Generator::printDefaultHeader()
 {
 	*out <<
@@ -55,79 +10,123 @@ void x86Generator::printDefaultHeader()
 		"section .text\n";
 }
 
-void x86Generator::printAsm(std::string s)
+bool x86Generator::printAST(ClassDefin root)
 {
-	*out << s;
-	//out->write(s.c_str(), s.length()-1);
+	printDefaultHeader();
+	for(Definition *d : root.defs)
+	{
+		d->accept(this);
+	}
+	return true;
 }
 
-void x86Generator::printMov(Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	if(src.type == TokenType::Number)
-	{
-		printMov(resolveIdent(des, varTable, scopes), src.value, "qword", varTable, scopes);
-	}
-	else if(src.type == TokenType::Identifier)
-	{
-		printMov("r11", resolveIdent(src, varTable, scopes), "", varTable, scopes);
-		printMov(resolveIdent(des, varTable, scopes), "r11", "", varTable, scopes);
-	}
-	else if (src.type == TokenType::Function)
-	{
-		printMov(resolveIdent(des, varTable, scopes), "rax", "qword", varTable, scopes);
-	}
-}
-void x86Generator::printMov(Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	printMov(resolveIdent(des, varTable, scopes), src, "qword", varTable, scopes);
-}
-void x86Generator::printMov(std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	if (src.type == TokenType::Identifier) printMov(des, resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
-	else if (src.type == TokenType::Function)
-	{
-		printMov(des, "rax", "qword", varTable, scopes);
-	}
-	else printMov(des, src.value, "qword", varTable, scopes);
-}
-void x86Generator::printMov(std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
+void x86Generator::printMov(std::string type, std::string des, std::string src)
 {
 	if (!type.empty()) type.append(" ");
 	*out << "mov " << type << des << ", " << src << std::endl;
 }
 
-void x86Generator::printAddSubMul(std::string x86Operand, Token des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	if (src.type == TokenType::Number)
-	{
-		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), src.value, "qword", varTable, scopes);
-	}
-	else if (src.type == TokenType::Identifier)
-	{
-		printMov("r11", resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
-		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), "r11", "qword", varTable, scopes);
-		printMov(resolveIdent(des, varTable, scopes), "r11", "qword", varTable, scopes);
-	}
-	else if(src.type == TokenType::Function)
-	{
-		printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), "rax", "qword", varTable, scopes);
-	}
-}
-void x86Generator::printAddSubMul(std::string x86Operand, Token des, std::string src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	printAddSubMul(x86Operand, resolveIdent(des, varTable, scopes), src, "qword", varTable, scopes);
-}
-void x86Generator::printAddSubMul(std::string x86Operand, std::string des, Token src, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
-{
-	if (src.type == TokenType::Identifier) printAddSubMul(x86Operand, des, resolveIdent(src, varTable, scopes), "qword", varTable, scopes);
-	else if (src.type == TokenType::Function)
-	{
-		printAddSubMul(x86Operand, des, "rax", "qword", varTable, scopes);
-	}
-	else printAddSubMul(x86Operand, des, src.value, "qword", varTable, scopes);
-}
-void x86Generator::printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type, std::unordered_map<std::string, Variable> varTable, std::vector<int> scopes)
+void x86Generator::printAddSubMul(std::string x86Operand, std::string type, std::string des, std::string src)
 {
 	if (!type.empty()) type.append(" ");
 	*out << x86Operand << " " << type << des << ", " << src << std::endl;
+}
+
+void x86Generator::visit(Expression* node, std::string des)
+{
+	std::string res = "";
+	switch (node->tokens.front().type)
+	{
+	case TokenType::Number:
+		res = "mov qword " + des + ", " + node->tokens.front().value + "\n";
+		break;
+	case TokenType::Identifier:
+	{
+		auto f = ft.find(node->tokens.front().value);
+		auto s = st.find(node->tokens.front().value);
+		if (f != ft.end())
+		{
+			res.append("call " + f->second.t.value + "\n");
+			res.append("mov qword " + des + ", rax\n");
+		}
+		else if (s != st.end())
+		{
+			res = "mov qword r11, " + blib::asmVar(s->second) + "\n";
+			res.append("mov qword " + des + ", r11\n");
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	*out << res;
+}
+void x86Generator::visit(VarAssign* node)
+{
+	Variable var;
+	auto f = st.find(node->t.value);
+	if (f == st.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
+	else var = f->second;
+	//res.append("mov qword [rsp+" + blib::varOffsetStr(var) + "], " + expr.res());
+	node->expr.des = blib::asmVar(var);
+	node->expr.accept(this);
+}
+void x86Generator::visit(FuncCall* node)
+{
+	Function func;
+	auto f = ft.find(node->t.value);
+	if (f == ft.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
+	else func = f->second;
+	std::string res = "";
+	res.append("call " + func.t.value + "\n");
+	*out << res;
+}
+void x86Generator::visit(ReturnCall* node)
+{
+	if (node->expr.tokens.empty()) { *out << "ret\n";  return; }
+	std::string res = "";
+	node->expr.des = "[rsp]";
+	node->expr.accept(this);
+
+	if (curFunc.t.value == "main")
+	{
+		res.append("mov rcx, [rsp]\n");
+		res.append("call ExitProcess\n");
+	}
+	else res.append("mov rax, [rsp]\n");
+	int reqSize = curFunc.stackSize % 16;
+	reqSize += curFunc.stackSize;
+	res.append("add rsp, " + std::to_string(reqSize) + "\n");
+	res.append("ret\n");
+	*out << res;
+}
+void x86Generator::visit(ClassDefin* node)
+{
+	st = node->c.classSymbolTable;
+	ft = node->c.functionTable;
+	return;
+}
+void x86Generator::visit(VarDef* node)
+{
+	std::string res = "";
+	node->expr.des = blib::asmVar(node->var);
+	node->expr.accept(this);
+	return;
+}
+void x86Generator::visit(FuncDef* node)
+{
+	std::string res = "";
+	res.append(node->func.t.value + ":\n");
+	int reqSize = node->func.stackSize % 16;
+	reqSize += node->func.stackSize;
+	if (node->func.t.value == "main") reqSize += 40;
+	res.append("sub rsp, " + std::to_string(reqSize) + "\n");
+	*out << res;
+	st = node->func.symbolTable;
+	ft = *node->func.functionTable;
+	curFunc = node->func;
+	for (Statement* s : node->statements)
+	{
+		s->accept(this);
+	}
 }

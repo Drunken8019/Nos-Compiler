@@ -1,0 +1,14 @@
+class Main
+{
+	def main()
+	{
+		let x = 10;
+		let y = fun();
+		return y;
+	}
+	
+	def fun()
+	{
+		return 20;
+	}
+}

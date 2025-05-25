@@ -1,12 +1,5 @@
 #pragma once
-#include <string>
-#include <queue>
-#include <iostream>
-#include <fstream>
-#include <unordered_map>
-#include <algorithm>
-#include <cctype>
-#include "Data.h"
+#include "x86Generator.h"
 
 class Lexer
 {
@@ -27,10 +20,10 @@ private:
 	std::queue<Token> readBuffer;
 
 	std::unordered_map<std::string, TokenType> keywords = {
-		{"exit", TokenType::Exit},
 		{"let", TokenType::Let},
 		{"def", TokenType::Define},
 		{"return", TokenType::Return},
+		{"class", TokenType::ClassDef},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
@@ -40,6 +33,7 @@ private:
 		{')', TokenType::RParen},
 		{'=', TokenType::Equals},
 		{';', TokenType::Semicolon},
+		{',', TokenType::Comma},
 		{'+', TokenType::Plus},
 		{'-', TokenType::Minus},
 		{'*', TokenType::Mult},

@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
 {
 	if (argc == 1)
 	{
-		cout << "No source file (.nir) provided.";
+		cout << "No source file (.nos) provided.";
 	}
 	else if (argc == 2)
 	{
@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 			int took = end.tm_sec - start.tm_sec;
 			cout << std::endl << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
 		}
-		else cout << "Wrong file type. Correct extension: .nir";
+		else cout << "Wrong file type. Correct extension: .nos";
 	}
 	else cout << "Too many arguments.";
 	return 0;
@@ -64,9 +64,9 @@ bool checkExtension(char* s)
 		{
 			if(s[counter+1] != '\0' && s[counter + 1] == 'n')
 			{
-				if (s[counter + 2] != '\0' && s[counter + 2] == 'i')
+				if (s[counter + 2] != '\0' && s[counter + 2] == 'o')
 				{
-					if (s[counter + 3] != '\0' && s[counter + 3] == 'r')
+					if (s[counter + 3] != '\0' && s[counter + 3] == 's')
 					{
 						return true;
 					}

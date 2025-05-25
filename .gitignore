@@ -11,6 +11,9 @@ test.nir
 asm_auto.bat
 commands.txt
 
+#Personal Roadmap File
+roadmap.txt
+
 # User-specific files
 *.rsuser
 *.suo
