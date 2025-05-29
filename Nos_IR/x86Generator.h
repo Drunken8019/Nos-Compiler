@@ -13,7 +13,7 @@ public:
 	x86Generator(){};
 	x86Generator(std::ofstream* o) : out(o) {};
 
-	bool printAST(ClassDefin root);
+	void printAST(ClassDefin root);
 
 	void printDefaultHeader();
 
@@ -25,6 +25,9 @@ public:
 	void visit(VarAssign* node) override;
 	void visit(FuncCall* node) override;
 	void visit(ReturnCall* node) override;
+	void visit(IfStmnt* node) override;
+	void visit(ElseStmnt* node) override;
+	void visit(WhileStmnt* node) override;
 	void visit(ClassDefin* node) override;
 	void visit(VarDef* node) override;
 	void visit(FuncDef* node) override;

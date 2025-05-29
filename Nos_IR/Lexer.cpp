@@ -85,7 +85,10 @@ bool Lexer::loadTokens(std::string curLine)
 	for (int i = 0; i < curLine.length(); i++)
 	{
 		auto sFound = symbols.find(curLine[i]);
-		if (sFound != symbols.end()) tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+		if (sFound != symbols.end()) 
+		{ 
+			tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} }); 
+		}
 		else
 		{
 			if (std::isdigit(curLine[i]))

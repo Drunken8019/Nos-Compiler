@@ -25,6 +25,21 @@ void ReturnCall::accept(Visitor* v)
 	v->visit(this);
 }
 
+void IfStmnt::accept(Visitor* v)
+{
+	v->visit(this);
+}
+
+void ElseStmnt::accept(Visitor* v)
+{
+	v->visit(this);
+}
+
+void WhileStmnt::accept(Visitor* v)
+{
+	v->visit(this);
+}
+
 void Definition::accept(Visitor* v)
 {
 	return;

@@ -1,5 +1,5 @@
 #pragma once
-#include "x86Generator.h"
+#include "Data.h"
 
 class Lexer
 {
@@ -24,6 +24,9 @@ private:
 		{"def", TokenType::Define},
 		{"return", TokenType::Return},
 		{"class", TokenType::ClassDef},
+		{"if", TokenType::If},
+		{"else", TokenType::Else},
+		{"while", TokenType::While},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
@@ -38,6 +41,8 @@ private:
 		{'-', TokenType::Minus},
 		{'*', TokenType::Mult},
 		{'/', TokenType::Div},
+		{'<', TokenType::LDBracket},
+		{'>', TokenType::RDBracket},
 	};
 };
 

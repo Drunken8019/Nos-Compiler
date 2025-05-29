@@ -8,6 +8,9 @@ public:
 	virtual void visit(VarAssign* node) = 0;
 	virtual void visit(FuncCall* node) = 0;
 	virtual void visit(ReturnCall* node) = 0;
+	virtual void visit(IfStmnt* node) = 0;
+	virtual void visit(ElseStmnt* node) = 0;
+	virtual void visit(WhileStmnt* node) = 0;
 	virtual void visit(ClassDefin* node) = 0;
 	virtual void visit(VarDef* node) = 0;
 	virtual void visit(FuncDef* node) = 0;

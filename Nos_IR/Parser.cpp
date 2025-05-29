@@ -44,7 +44,8 @@ void Parser::parse() //When implementing OOP, this will be Class level... The pa
 	else if (stmnt[0].type != TokenType::ClassDef) { printErrorMsg("Definitions need to be contained within a class", stmnt[0]); return; }
 	root = parseClassDef(stmnt);
 	
-	resolveAST(&root);
+	//resolveAST(&root);
+	res.resolveAST(&root);
 	gen.printAST(root);
 }
 

@@ -10,14 +10,13 @@ void x86Generator::printDefaultHeader()
 		"section .text\n";
 }
 
-bool x86Generator::printAST(ClassDefin root)
+void x86Generator::printAST(ClassDefin root)
 {
 	printDefaultHeader();
 	for(Definition *d : root.defs)
 	{
 		d->accept(this);
 	}
-	return true;
 }
 
 void x86Generator::printMov(std::string type, std::string des, std::string src)
@@ -85,21 +84,30 @@ void x86Generator::visit(ReturnCall* node)
 {
 	if (node->expr.tokens.empty()) { *out << "ret\n";  return; }
 	std::string res = "";
-	node->expr.des = "[rsp]";
+	node->expr.des = "[rsp+32]";
 	node->expr.accept(this);
 
 	if (curFunc.t.value == "main")
 	{
-		res.append("mov rcx, [rsp]\n");
+		res.append("mov rcx, [rsp+32]\n");
 		res.append("call ExitProcess\n");
 	}
-	else res.append("mov rax, [rsp]\n");
+	else res.append("mov rax, [rsp+32]\n");
 	int reqSize = curFunc.stackSize % 16;
 	reqSize += curFunc.stackSize;
+	reqSize += 40;
 	res.append("add rsp, " + std::to_string(reqSize) + "\n");
 	res.append("ret\n");
 	*out << res;
 }
+void x86Generator::visit(IfStmnt* node)
+{
+
+}
+void x86Generator::visit(ElseStmnt* node)
+{}
+void x86Generator::visit(WhileStmnt* node)
+{}
 void x86Generator::visit(ClassDefin* node)
 {
 	st = node->c.classSymbolTable;
@@ -119,7 +127,7 @@ void x86Generator::visit(FuncDef* node)
 	res.append(node->func.t.value + ":\n");
 	int reqSize = node->func.stackSize % 16;
 	reqSize += node->func.stackSize;
-	if (node->func.t.value == "main") reqSize += 40;
+	reqSize += 40;
 	res.append("sub rsp, " + std::to_string(reqSize) + "\n");
 	*out << res;
 	st = node->func.symbolTable;

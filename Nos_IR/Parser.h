@@ -1,5 +1,7 @@
 #pragma once
 #include "Lexer.h"
+#include "x86Generator.h"
+#include "Resolver.h"
 
 class Parser
 {
@@ -28,5 +30,6 @@ public:
 
 	Lexer lex;
 	x86Generator gen;
+	Resolver res;
 };
 

@@ -2,7 +2,7 @@ class Main
 {
 	def main()
 	{
-		let x = 10;
+		let x =  10;
 		let y = fun();
 		return y;
 	}
