@@ -37,24 +37,31 @@ std::vector<Token> Parser::getStatement()
 
 void Parser::parse() //When implementing OOP, this will be Class level... The parse Root will be moved 1 up then
 {
-	ClassDefin root;
+	Root root;
 	std::vector<int> scopes;
 	std::vector<Token> stmnt = getStatement();
 	if(stmnt.empty()) { printErrorMsg("Empty File", {TokenType::COMPILER_EOF, "", {0, 0}}); return; }
-	else if (stmnt[0].type != TokenType::ClassDef) { printErrorMsg("Definitions need to be contained within a class", stmnt[0]); return; }
-	root = parseClassDef(stmnt);
+	else
+	{
+		root = parseRoot(stmnt);
+	}
 	
 	//resolveAST(&root);
 	res.resolveAST(&root);
 	gen.printAST(root);
 }
 
-bool Parser::resolveAST(ClassDefin* root)
+Root Parser::parseRoot(std::vector<Token> stmnt)
 {
-	bool res = false;
-	for(Definition* d : root->defs)
+	Root res = { stmnt[0] };
+	std::vector<Token> nextStmnt = stmnt;
+	while (!nextStmnt.empty())
 	{
-		res = d->resolve(&root->c);
+		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
+
+		Definition* d = parseDefinition(nextStmnt);
+		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
+		nextStmnt = getStatement();
 	}
 	return res;
 }
@@ -162,6 +169,9 @@ Statement* Parser::parseStatement(std::vector<Token> stmnt)
 	case TokenType::Return:
 		return new ReturnCall(parseFuncReturn(stmnt));
 		break;
+	case TokenType::If:
+		return new IfStmnt(parseIfStmnt(stmnt));
+		break;
 	default:
 		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
 	}
@@ -238,6 +248,45 @@ ReturnCall Parser::parseFuncReturn(std::vector<Token> stmnt)
 	}
 	rc.expr = e;
 	return rc;
+}
+
+IfStmnt Parser::parseIfStmnt(std::vector<Token> stmnt)
+{
+	IfStmnt res = { stmnt[0] };
+	if (stmnt[1].value != "(") { printErrorMsg("Expected \"(\" after if", stmnt[1]); return {errTok}; }
+	int i = 2;
+	for(; i<stmnt.size(); i++)
+	{
+		if(stmnt[i].value == ")")
+		{
+			break;
+		}
+		res.cond.tokens.push_back(stmnt[i]);
+	}
+	i++;
+	if (stmnt[i].value != "{") { printErrorMsg("Expected \"{\" before if-body", stmnt[i]); return { errTok }; }
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		res.body.push_back(s);
+		nextStmnt = getStatement();
+	}
+	return res;
+}
+
+ElseStmnt Parser::parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec)
+{
+	return errTok;
+}
+
+WhileStmnt Parser::parseWhileStmnt(std::vector<Token> stmnt)
+{
+	return errTok;
 }
 
 void Parser::printErrorMsg(std::string msg, Token t)

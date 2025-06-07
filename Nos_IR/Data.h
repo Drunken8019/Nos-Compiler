@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <queue>
+#include <stack>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -11,9 +12,9 @@ class Visitor;
 enum TokenType
 {
 	COMPILER_EOF, COMPILER_EMPTY, COMPILER_ERROR,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket,
-	ClassDef, Let, Define, Identifier, Return, If, Else, While,
-	Number
+	EXPR_DEST, EXPR_TMP,
+	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq,
+	ClassDef, Let, Define, Identifier, Return, If, Else, While, Number
 };
 
 enum AST
@@ -120,6 +121,7 @@ class Expression : public ASTNode
 public:
 	std::vector<Token> tokens;
 	std::string des = "";
+	std::queue<Token> rpn;
 
 	Expression()
 	{}
@@ -149,16 +151,6 @@ public:
 		return AST::ASTStatement;
 	}
 
-	virtual bool resolve(Class* owner) 
-	{
-		return false;
-	};
-
-	virtual bool resolve(Function* owner)
-	{
-		return false;
-	};
-
 	void accept(Visitor* v);
 };
 
@@ -172,20 +164,6 @@ public:
 
 	VarAssign(Token t, Expression e) : expr(e), Statement(t)
 	{}
-
-	/*bool resolve(Class* owner)
-	{
-		auto r = owner->classSymbolTable.find(t.value);
-		if (r == owner->classSymbolTable.end()) { std::cout << "Couldn't resolve identifier \"" + t.value + "\"\n"; return false; }
-		return true;
-	}
-
-	bool resolve(Function* owner)
-	{
-		auto r = owner->symbolTable.find(t.value);
-		if (r == owner->symbolTable.end()) { std::cout << "Couldn't resolve identifier \"" + t.value + "\"\n"; return false; }
-		return true;
-	}*/
 
 	void accept(Visitor* v);
 };
@@ -201,16 +179,6 @@ public:
 	FuncCall(Token t) : Statement(t)
 	{}
 
-	/*bool resolve(Class* owner)
-	{
-		return true;
-	}
-
-	bool resolve(Function* owner)
-	{
-		return true;
-	}*/
-
 	void accept(Visitor* v);
 };
 
@@ -225,39 +193,41 @@ public:
 	ReturnCall(Token ret, Expression v): expr(v), Statement(ret)
 	{}
 
-	/*bool resolve(Class* owner)
-	{
-		return true;
-	}
-
-	bool resolve(Function* owner)
-	{
-		return true;
-	}*/
-
 	void accept(Visitor* v);
 };
 
 class IfStmnt : public Statement
 {
+public:
 	Expression cond;
 	std::vector<Statement*> body;
+	std::unordered_map<std::string, Variable> symbolTable;
+
+	IfStmnt(Token t) : Statement(t) {}
 
 	void accept(Visitor* v);
 };
 
 class ElseStmnt : public Statement
 {
-	IfStmnt par;
+public:
+	IfStmnt prec;
 	std::vector<Statement*> body;
+	std::unordered_map<std::string, Variable> symbolTable;
+
+	ElseStmnt(Token t) : Statement(t), prec(t){}
 
 	void accept(Visitor* v);
 };
 
 class WhileStmnt : public Statement
 {
+public:
 	Expression cond;
 	std::vector<Statement*> body;
+	std::unordered_map<std::string, Variable> symbolTable;
+
+	WhileStmnt(Token t) : Statement(t){}
 
 	void accept(Visitor* v);
 };
@@ -310,28 +280,6 @@ public:
 	{
 	}
 
-	/*bool resolve(Class* owner)
-	{
-		auto r = owner->classSymbolTable.find(t.value);
-		if (r != owner->classSymbolTable.end()) { std::cout << "Variable \"" + t.value + "\" already defined in scope\n"; return false; }
-		owner->classSymbolTable.insert({ t.value, var });
-		owner->stackSize += var.size;
-		var.numID = owner->varCount;
-		owner->varCount++;
-		return true;
-	}
-
-	bool resolve(Function* owner)
-	{
-		auto r = owner->symbolTable.find(t.value);
-		if (r != owner->symbolTable.end()) { std::cout << "Variable \"" + t.value + "\" already defined in scope\n"; return false; }
-		var.numID = owner->varCount;
-		owner->symbolTable.insert({ t.value, var });
-		owner->stackSize += var.size;
-		owner->varCount++;
-		return true;
-	}*/
-
 	AST type()
 	{
 		return AST::ASTVarDef;
@@ -354,31 +302,26 @@ public:
 	FuncDef(Token t) : func(t), Definition(t)
 	{}
 
-	/*bool resolve(Class* owner)
-	{
-		bool res = false;
-		auto r = owner->functionTable.find(t.value);
-		if (r != owner->functionTable.end()) { std::cout << "Function \"" + t.value + "\" already defined in scope\n"; return false; }
-		owner->functionTable.insert({ t.value, func });
-		func.symbolTable = owner->classSymbolTable;
-		func.functionTable = &owner->functionTable;
-		for(Statement *s : statements)
-		{
-			res = s->resolve(&func);
-		}
-		return res;
-	}
-
-	bool resolve(Function* owner)
-	{
-		std::cout << "Function cannot be defiened inside function.";
-		return false;
-	}*/
-
 	void accept(Visitor* v);
 
 	AST type()
 	{
 		return AST::ASTFuncDef;
 	}
+};
+
+//--------------------------- Root ------------------------------
+class Root : public ASTNode
+{
+public:
+	std::vector<Definition*> defs;
+	Root()
+	{
+	}
+
+	Root(Token t) : ASTNode(t)
+	{
+	}
+
+	void accept(Visitor* v);
 };

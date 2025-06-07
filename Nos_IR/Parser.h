@@ -15,6 +15,7 @@ public:
 	Token errTok = { TokenType::COMPILER_ERROR, "", {0, 0} };
 
 	std::vector<Token> getStatement();
+	Root parseRoot(std::vector<Token> stmnt);
 	ClassDefin parseClassDef(std::vector<Token> stmnt);
 	Definition* parseDefinition(std::vector<Token> stmnt);
 	Statement* parseStatement(std::vector<Token> stmnt);
@@ -23,6 +24,9 @@ public:
 	FuncCall parseFunctionCall(std::vector<Token> stmnt);
 	ReturnCall parseFuncReturn(std::vector<Token> stmnt);
 	VarAssign parseVarAsign(std::vector<Token> stmnt);
+	IfStmnt parseIfStmnt(std::vector<Token> stmnt);
+	ElseStmnt parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec);
+	WhileStmnt parseWhileStmnt(std::vector<Token> stmnt);
 
 	bool resolveAST(ClassDefin *root);
 

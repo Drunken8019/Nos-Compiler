@@ -1,5 +1,6 @@
 #pragma once
 #include "Visitor.h"
+#include "stack"
 
 class Resolver : public Visitor
 {
@@ -9,8 +10,10 @@ public:
 	Function *curFunc = nullptr;
 	Class *curClass = nullptr;
 
-	void resolveAST(ClassDefin* root);
+	void resolveAST(Root* root);
+	int getPrec(Token t);
 
+	void visit(Root* node) override;
 	void visit(Expression* node, std::string des) override;
 	void visit(VarAssign* node) override;
 	void visit(FuncCall* node) override;

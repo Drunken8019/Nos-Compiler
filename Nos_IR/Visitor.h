@@ -4,6 +4,7 @@
 class Visitor
 {
 public:
+	virtual void visit(Root* node) = 0;
 	virtual void visit(Expression* node, std::string des) = 0;
 	virtual void visit(VarAssign* node) = 0;
 	virtual void visit(FuncCall* node) = 0;

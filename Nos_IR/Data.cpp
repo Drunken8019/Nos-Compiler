@@ -59,3 +59,8 @@ void FuncDef::accept(Visitor* v)
 {
 	v->visit(this);
 }
+
+void Root::accept(Visitor* v)
+{
+	v->visit(this);
+}

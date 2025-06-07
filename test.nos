@@ -1,14 +1,10 @@
-class Main
+def main()
 {
-	def main()
+	let y = 5 + 10 * 2;
+	let x = 1;
+	if(y < 12 > 1)
 	{
-		let x =  10;
-		let y = fun();
-		return y;
+		y = 1;
 	}
-	
-	def fun()
-	{
-		return 20;
-	}
+	return y;
 }
