@@ -1,5 +1,4 @@
 #include "Parser.h"
-#include "x86Generator.h"
 
 Parser::Parser(std::ifstream* in, std::ofstream* out)
 {
@@ -7,34 +6,13 @@ Parser::Parser(std::ifstream* in, std::ofstream* out)
 	this->gen = { out };
 }
 
-/*int Parser::calcVarOffset(int offset)
-{
-	return (offset * 8);
-}
-
-std::string Parser::resolveIdent(Token t)
-{
-	std::string result = "";
-	auto f = varTable.find(t.value);
-	if (f != varTable.end())
-	{
-		result.append("[rsp+");
-		result.append(std::to_string(calcVarOffset(f->second)));
-		result.append("]");
-	}
-	else
-	{
-		std::cout << "Symbol not recognized. At line " << t.loc.line << ", col " << t.loc.column << std::endl;
-	}
-	return result;
-}*/
-
 std::vector<Token> Parser::getStatement()
 {
 	Token curToken = lex.nextToken();
 	std::vector<Token> result;
 	while (curToken.type != TokenType::COMPILER_EOF)
 	{
+		std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 		switch (curToken.type)
 		{
 		case TokenType::LCBrace:
@@ -51,229 +29,269 @@ std::vector<Token> Parser::getStatement()
 
 		default:
 			result.push_back(curToken);
-			//std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 			curToken = lex.nextToken();
 		}
 	}
 	return result;
 }
 
-void Parser::parse()
+void Parser::parse() //When implementing OOP, this will be Class level... The parse Root will be moved 1 up then
 {
-	gen.printDefaultHeader();
-	//gen.startMatching(lex);
-	bool identified = false;
+	Root root;
+	std::vector<int> scopes;
 	std::vector<Token> stmnt = getStatement();
-
-	while(!stmnt.empty())
+	if(stmnt.empty()) { printErrorMsg("Empty File", {TokenType::COMPILER_EOF, "", {0, 0}}); return; }
+	else
 	{
-		identified = parseStatement(stmnt);
-		stmnt = getStatement();
+		root = parseRoot(stmnt);
 	}
 	
+	//resolveAST(&root);
+	res.resolveAST(&root);
+	gen.printAST(root);
 }
 
-bool Parser::parseStatement(std::vector<Token> stmnt)
+Root Parser::parseRoot(std::vector<Token> stmnt)
 {
-	bool valid = true;
+	Root res = { stmnt[0] };
+	std::vector<Token> nextStmnt = stmnt;
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
+
+		Definition* d = parseDefinition(nextStmnt);
+		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
+		nextStmnt = getStatement();
+	}
+	return res;
+}
+
+ClassDefin Parser::parseClassDef(std::vector<Token> stmnt)
+{
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"class\"", stmnt[1]); return {errTok}; }
+	else if (stmnt[2].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt[1]); return {errTok}; }
+	//---------------------------- END ------------------------------
+
+	ClassDefin res = { stmnt[1] };
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
+
+		Definition* d = parseDefinition(nextStmnt);
+		//d->resolve(new Class()); SLICED
+		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
+		nextStmnt = getStatement();
+	}
+	return res;
+}
+
+Definition* Parser::parseDefinition(std::vector<Token> stmnt)
+{
 	switch (stmnt[0].type)
 	{
-	case TokenType::Define:
-		valid = parseFunctionDef(stmnt);
-		break;
-
 	case TokenType::Let:
-		valid = parseVarDef(stmnt);
+	{
+		Definition* d = new VarDef(parseVarDef(stmnt));
+		
+		return d;
+		break;
+	}
+
+	case TokenType::Define:
+	{
+		Definition* d = new FuncDef(parseFunctionDef(stmnt));
+		//d->resolve(new Class()); SLICED
+		return d;
+		break;
+	}
+	default:
+		//-------------------- Syntax-Error handling --------------------
+		printErrorMsg("Only variable definitions or function definitions allowed", stmnt[0]);
+		//---------------------------- END ------------------------------
+		Definition* d = new Definition(errTok);
+		return d;
+		break;
+	}
+}
+
+FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
+{
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return { errTok }; }
+	else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return { errTok }; }
+	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
+	//---------------------------- END ------------------------------
+	Expression e;
+	FuncDef fd = { stmnt[1] };
+	for (int i = 3; i < stmnt.size(); i++)
+	{
+		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
+		{
+			e.tokens.push_back(stmnt[i]);
+		}
+		else
+		{
+			fd.params.push_back(e);
+		}
+		//fd.params.push_back(e);
+	}
+
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		fd.statements.push_back(s);
+		nextStmnt = getStatement();
+	}
+	//fd.resolve(new Class()); FINE
+	return fd;
+}
+
+Statement* Parser::parseStatement(std::vector<Token> stmnt)
+{
+	switch (stmnt[0].type)
+	{
+	case TokenType::Let:
+		return new VarDef(parseVarDef(stmnt));
 		break;
 
 	case TokenType::Identifier:
-		if (parseFunctionCall(stmnt)) valid = true;
-		else if (parseVarAsign(stmnt)) valid = true;
-		else valid = false;
+		if (stmnt[1].type == TokenType::LParen) return new FuncCall(parseFunctionCall(stmnt));
+		else return new VarAssign(parseVarAsign(stmnt));
 		break;
 
-	case TokenType::Exit:
-		valid = parseExit(stmnt);
+	case TokenType::Return:
+		return new ReturnCall(parseFuncReturn(stmnt));
 		break;
+	case TokenType::If:
+		return new IfStmnt(parseIfStmnt(stmnt));
+		break;
+	default:
+		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
 	}
-	return valid;
+	return new Statement(errTok);
 }
 
-bool Parser::parseFunctionDef(std::vector<Token> stmnt)
+VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 {
-	bool paramListClosed = false;
-	bool functionBodyClosed = false;
-	
-	if (stmnt[1].type != TokenType::Identifier) { std::cout << "Expected identifier after \"def\"" << std::endl; return false; }
-	else if (stmnt[2].type != TokenType::LParen) { std::cout << "Expected \"(\"" << std::endl; return false; }
-
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return { {stmnt[1], 8}, {{errTok}} }; }
+	else if (stmnt[2].type == TokenType::Semicolon) 
+	{ 
+		return { {stmnt[1], 8}, {{emptyTok}} };
+	}
+	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return { {stmnt[1], 8}, {{errTok}} }; }
+	//---------------------------- END ------------------------------
+	Expression e;
 	int i = 3;
 	for(; i<stmnt.size(); i++)
 	{
-		//TODO: Compute param expr
-		if(stmnt[i].type == TokenType::RParen)
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
+	}
+	return { {stmnt[1], 8}, e};
+}
+
+FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
+{
+	FuncCall fc = { stmnt[0] };
+	if (stmnt[2].type == TokenType::RParen) return fc;
+
+	int i = 2;
+	Expression e;
+	for(; i<stmnt.size(); i++)
+	{
+		if(stmnt[i].type != TokenType::Comma)
 		{
-			paramListClosed = true;
-			break;
+			e.tokens.push_back(stmnt[i]);
+		}
+		else
+		{
+			fc.params.push_back(e);
 		}
 	}
-	if(!paramListClosed){ std::cout << "Expected \")\"" << std::endl; return false; }
+	return fc;
+}
 
-	if(i+1 < stmnt.size()) i++;
-	if (stmnt[i].type != TokenType::LCBrace) { std::cout << "Expected \"{\"" << std::endl; return false; }
-
-	gen.printAsm(stmnt[1].value + ":\n"); //TESTING
-	if (stmnt[1].value == "main") //DEBUG, will be rmeoved
+VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
+{
+	
+	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
+	else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
+	Expression e;
+	VarAssign va = { stmnt[0], e };
+	int i = 2;
+	for(; i<stmnt.size(); i++)
 	{
-		gen.printAsm("sub rsp, 360\n"); 
-	} 
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
+	}
+	va.t = stmnt[0];
+	va.expr = e;
+	return va;
+}
 
-	std::vector<Token> nextStmnt = getStatement();
-	while(!nextStmnt.empty())
+ReturnCall Parser::parseFuncReturn(std::vector<Token> stmnt)
+{
+	Expression e;
+	ReturnCall rc = { stmnt[0], e };
+	for(int i = 1; i<stmnt.size(); i++)
 	{
-		if(nextStmnt.back().type == TokenType::RCBrace)
+		if (stmnt[i].type == TokenType::Semicolon) break;
+		e.tokens.push_back(stmnt[i]);
+	}
+	rc.expr = e;
+	return rc;
+}
+
+IfStmnt Parser::parseIfStmnt(std::vector<Token> stmnt)
+{
+	IfStmnt res = { stmnt[0] };
+	if (stmnt[1].value != "(") { printErrorMsg("Expected \"(\" after if", stmnt[1]); return {errTok}; }
+	int i = 2;
+	for(; i<stmnt.size(); i++)
+	{
+		if(stmnt[i].value == ")")
 		{
-			functionBodyClosed = true;
 			break;
 		}
-		parseStatement(nextStmnt);
+		res.cond.tokens.push_back(stmnt[i]);
+	}
+	i++;
+	if (stmnt[i].value != "{") { printErrorMsg("Expected \"{\" before if-body", stmnt[i]); return { errTok }; }
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		res.body.push_back(s);
 		nextStmnt = getStatement();
 	}
-
-	if (!functionBodyClosed) { std::cout << "Expected \"}\"" << std::endl; return false; }
-	return true;
+	return res;
 }
 
-bool Parser::parseVarDef(std::vector<Token> stmnt)
+ElseStmnt Parser::parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec)
 {
-	if (stmnt[1].type != TokenType::Identifier) { std::cout << "Expected identifier after \"let\"" << std::endl; return false; }
-	else if(gen.varTable.find(stmnt[1].value) != gen.varTable.end()) { std::cout << "\"" << stmnt[1].value << "\" is already defined" << std::endl; return false; }
-	else if (stmnt[2].type == TokenType::Semicolon) 
-	{ 
-		gen.varTable.insert({ stmnt[1].value, varCount });
-		varCount++;
-		return true; 
-	}
-	else if (stmnt[2].type != TokenType::Equals) { std::cout << "Expected \"=\"" << std::endl; return false; }
-
-	gen.varTable.insert({ stmnt[1].value, varCount });
-
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin() + 3, stmnt.end() - 1);
-
-
-	//compExpr(expr, resolveIdent(stmnt[1]));
-	compExpr(expr, "", stmnt[1]);
-	varCount++;
-	
-
-	return true;
+	return errTok;
 }
 
-bool Parser::parseFunctionCall(std::vector<Token> stmnt)
+WhileStmnt Parser::parseWhileStmnt(std::vector<Token> stmnt)
 {
-	if (stmnt[1].type != TokenType::LParen) return false;
-	else if(stmnt[2].type != TokenType::RParen) return false;
-	gen.printAsm("call " + stmnt[0].value);
+	return errTok;
 }
 
-bool Parser::parseVarAsign(std::vector<Token> stmnt)
+void Parser::printErrorMsg(std::string msg, Token t)
 {
-	if (stmnt[1].type == TokenType::Semicolon) { std::cout << "Not a statement" << std::endl; return false; }
-	else if (stmnt[1].type != TokenType::Equals) { std::cout << "Expected \"=\"" << std::endl; return false; }
-
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin()+2, stmnt.end()-1);
-	//compExpr(expr, resolveIdent(stmnt[0]));
-	compExpr(expr, "", stmnt[0]);
-	varCount++;
-}
-
-bool Parser::compExpr(std::vector<Token> expr, std::string x86Dest, Token dest)
-{
-	if(expr.size() == 1)
-	{
-		if(!x86Dest.empty()) gen.printMov(x86Dest, expr[0]);
-		else gen.printMov(dest, expr[0]);
-		/*switch (expr[0].type)
-		{
-		case TokenType::Number:
-			gen.printAsm("\tmov qword " + x86Dest + ", " + expr[0].value + "\n");
-			
-			break;
-		case TokenType::Identifier:
-			gen.printAsm("\tmov r11, " + resolveIdent(expr[0]) + "\n");
-			gen.printAsm("\tmov " + x86Dest + ", r11\n");
-			break;
-		}*/
-		return true;
-	}
-	//ONLY 3 Operator expr supported rn: left OPERATOR right
-	if (expr.size() > 3) { std::cout << "ONLY 3 Operator expr supported: left OPERATOR right"; return false; }
-	switch(expr[1].type)
-	{
-	case TokenType::Plus:
-		compSMA(expr[0], expr[2], x86Dest, dest, "add");
-		break;
-	case TokenType::Minus:
-		compSMA(expr[0], expr[2], x86Dest, dest, "sub");
-		break;
-	case TokenType::Mult:
-		compSMA(expr[0], expr[2], x86Dest, dest, "imul");
-		break;
-	case TokenType::Div:
-		break;
-	}
-	return true;
-}
-
-bool Parser::compSMA(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand)
-{
-	//Potential optimization: e.g. 5+3 = 8, jus to fucking lazy rn
-	/*if (l.type == TokenType::Number && l.type == TokenType::Number)
-	{
-		long int t = std::stol(l.value) + std::stol(r.value);
-		gen.printAsm("mov " + x86Dest + ", " + std::to_string(t));
-	}
-	else
-	{
-		std::string lRes = l.value, rRes = r.value;
-		if (l.type == TokenType::Identifier) lRes = resolveIdent(l);
-		if (r.type == TokenType::Identifier) rRes = resolveIdent(r);
-
-		gen.printAsm("mov rdx, " + lRes);
-		gen.printAsm("add rdx, " + rRes);
-		gen.printAsm("mov " + x86Dest + "rdx");
-	}*/
-
-	/*std::string lRes = l.value, rRes = r.value;
-	if (l.type == TokenType::Identifier) lRes = resolveIdent(l);
-	if (r.type == TokenType::Identifier) rRes = resolveIdent(r);
-
-	gen.printAsm("\tmov rdx, " + lRes + "\n");*/
-
-	gen.printMov("rdx", l);
-	//gen.printAsm("\t" + x86Operand + " rdx, " + rRes + "\n");
-	gen.printAddSubMul(x86Operand, "rdx", r);
-	if (!x86Dest.empty()) gen.printMov(x86Dest, "rdx", "qword");
-	else gen.printMov(dest, "rdx");
-	//gen.printAsm("\tmov " + x86Dest + ", rdx" + "\n");
-	return true;
-}
-
-bool Parser::parseExit(std::vector<Token> stmnt)
-{
-	std::vector<Token> expr;
-	expr.assign(stmnt.begin() + 1, stmnt.end() - 1);
-	compExpr({ expr }, "rcx", {});
-	gen.printAsm("call ExitProcess\n");
-	/*if (stmnt[1].type == TokenType::Number)
-	{
-		gen.printAsm("\tmov rcx, " + stmnt[1].value + "\n\tcall ExitProcess\n"); //TESTING
-	}
-	else if(stmnt[1].type == TokenType::Identifier)
-	{
-		gen.printAsm("\tmov rcx, " + resolveIdent(stmnt[1]) + "\n\tcall ExitProcess\n");
-	}*/
-	return true;
+	std::cout << std::endl;
+	std::cout << msg << std::endl;
+	std::cout << "- Occured at line " << t.loc.line << " and column " << t.loc.column << std::endl;
 }

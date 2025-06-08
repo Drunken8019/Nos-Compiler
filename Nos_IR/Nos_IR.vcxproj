@@ -127,14 +127,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Data.cpp" />
     <ClCompile Include="Lexer.cpp" />
     <ClCompile Include="Nos_IR.cpp" />
     <ClCompile Include="Parser.cpp" />
+    <ClCompile Include="Resolver.cpp" />
+    <ClCompile Include="Visitor.cpp" />
     <ClCompile Include="x86Generator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Data.h" />
     <ClInclude Include="Lexer.h" />
     <ClInclude Include="Parser.h" />
+    <ClInclude Include="Resolver.h" />
+    <ClInclude Include="Visitor.h" />
     <ClInclude Include="x86Generator.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

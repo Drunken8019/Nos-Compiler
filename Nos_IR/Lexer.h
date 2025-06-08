@@ -1,30 +1,5 @@
 #pragma once
-#include <string>
-#include <queue>
-#include <iostream>
-#include <fstream>
-#include <unordered_map>
-#include <algorithm>
-#include <cctype>
-
-enum TokenType
-{
-	COMPILER_EOF, COMPILER_EMPTY,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Plus, Minus, Mult, Div,
-	Let, Define, Identifier, Exit, Number,
-};
-
-struct Location
-{
-	int line, column;
-};
-
-struct Token
-{
-	TokenType type;
-	std::string value;
-	Location loc;
-};
+#include "Data.h"
 
 class Lexer
 {
@@ -45,9 +20,13 @@ private:
 	std::queue<Token> readBuffer;
 
 	std::unordered_map<std::string, TokenType> keywords = {
-		{"exit", TokenType::Exit},
 		{"let", TokenType::Let},
 		{"def", TokenType::Define},
+		{"return", TokenType::Return},
+		{"class", TokenType::ClassDef},
+		{"if", TokenType::If},
+		{"else", TokenType::Else},
+		{"while", TokenType::While},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
@@ -57,10 +36,13 @@ private:
 		{')', TokenType::RParen},
 		{'=', TokenType::Equals},
 		{';', TokenType::Semicolon},
+		{',', TokenType::Comma},
 		{'+', TokenType::Plus},
 		{'-', TokenType::Minus},
 		{'*', TokenType::Mult},
 		{'/', TokenType::Div},
+		{'<', TokenType::LDBracket},
+		{'>', TokenType::RDBracket},
 	};
 };
 

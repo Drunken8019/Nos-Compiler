@@ -1,58 +1,39 @@
 #pragma once
-#include <fstream>
-#include "Lexer.h"
+#include "Visitor.h"
 
-enum CTemplates
-{
-	Function, VarDef, ExitProc
-};
-
-class x86Generator
+class x86Generator : public Visitor
 {
 public:
-	template<typename L, typename R> class Option
-	{
-	private:
-		L opt1;
-		R opt2;
-
-	public:
-		const bool isLeft, isRight;
-		Option(L o) : isLeft(true), isRight(false)
-		{
-			opt1 = o;
-			opt2 = {};
-		}
-
-		Option(R o) : isLeft(false), isRight(true)
-		{
-			opt1 = {};
-			opt2 = o;
-		}
-
-		L getLeft() { return opt1; }
-		R getRight() { return opt2; }
-	};
-
 	std::ofstream* out;
+	std::unordered_map<std::string, Variable> st;
+	std::unordered_map<std::string, Function> ft;
+	Function curFunc;
+	int lCount = 0;
 
 
-	x86Generator();
-	x86Generator(std::ofstream* out);
+	x86Generator(){};
+	x86Generator(std::ofstream* o) : out(o) {};
 
-	int calcVarOffset(int offset);
-	std::string resolveIdent(Token t);
-	std::unordered_map<std::string, int> varTable;
+	void printAST(Root root);
 
-	void printAsm(std::string s);
 	void printDefaultHeader();
-	void printMov(Token des, Token src);
-	void printMov(Token des, std::string src);
-	void printMov(std::string des, Token src);
-	void printMov(std::string des, std::string src, std::string type);
+	std::string keyWord(Token t);
+	bool isCmp(Token t);
+	std::string resName(Token t);
 
-	void printAddSubMul(std::string x86Operand, Token des, Token src);
-	void printAddSubMul(std::string x86Operand, Token des, std::string src);
-	void printAddSubMul(std::string x86Operand, std::string des, Token src);
-	void printAddSubMul(std::string x86Operand, std::string des, std::string src, std::string type);
+	void printMov(std::string type, std::string des, std::string src);
+
+	void printAddSubMul(std::string x86Operand, std::string type, std::string des, std::string src);
+
+	void visit(Root* node) override;
+	void visit(Expression* node, std::string des) override;
+	void visit(VarAssign* node) override;
+	void visit(FuncCall* node) override;
+	void visit(ReturnCall* node) override;
+	void visit(IfStmnt* node) override;
+	void visit(ElseStmnt* node) override;
+	void visit(WhileStmnt* node) override;
+	void visit(ClassDefin* node) override;
+	void visit(VarDef* node) override;
+	void visit(FuncDef* node) override;
 };

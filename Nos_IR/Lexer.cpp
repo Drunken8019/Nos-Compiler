@@ -85,7 +85,10 @@ bool Lexer::loadTokens(std::string curLine)
 	for (int i = 0; i < curLine.length(); i++)
 	{
 		auto sFound = symbols.find(curLine[i]);
-		if (sFound != symbols.end()) tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+		if (sFound != symbols.end()) 
+		{ 
+			tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} }); 
+		}
 		else
 		{
 			if (std::isdigit(curLine[i]))
@@ -120,7 +123,10 @@ bool Lexer::loadTokens(std::string curLine)
 }
 
 bool isOnlyWhitespace(const std::string& str) {
-	return std::all_of(str.begin(), str.end(), [](unsigned char c) {
-		return std::isspace(c);
-	});
+	
+	for(char c : str)
+	{
+		if (!std::isspace(c)) { return false; }
+	}
+	return true;
 }

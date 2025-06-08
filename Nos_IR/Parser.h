@@ -1,7 +1,7 @@
 #pragma once
 #include "Lexer.h"
-#include <vector>
 #include "x86Generator.h"
+#include "Resolver.h"
 
 class Parser
 {
@@ -10,34 +10,30 @@ public:
 	void parse();
 
 //private:
-	template<typename T> class Expression
-	{
-	public:
-		bool lSet = false, rSet = false, opSet = false;
-		T left;
-		Token operand;
-		T right;
 
-		void setLeft(T l) { left = l; lSet = true; }
-		void setRight(T r) { left = r; rSet = true; }
-		void setOp(Token o) { operand = o; opSet = true; }
-	};
-
-	int varCount = 0;
-	//std::unordered_map<std::string, int> varTable;
+	Token emptyTok = { TokenType::COMPILER_EMPTY, "", {0, 0} };
+	Token errTok = { TokenType::COMPILER_ERROR, "", {0, 0} };
 
 	std::vector<Token> getStatement();
-	//int calcVarOffset(int offset);
-	//std::string resolveIdent(Token t);
-	bool parseStatement(std::vector<Token> stmnt);
-	bool parseFunctionDef(std::vector<Token> stmnt);
-	bool parseVarDef(std::vector<Token> stmnt);
-	bool parseFunctionCall(std::vector<Token> stmnt);
-	bool parseVarAsign(std::vector<Token> stmnt);
-	bool compExpr(std::vector<Token> expr, std::string x86Dest, Token dest);
-	bool compSMA(Token l, Token r, std::string x86Dest, Token dest, std::string x86Operand);
-	bool parseExit(std::vector<Token> stmnt); //Will probably be removed
+	Root parseRoot(std::vector<Token> stmnt);
+	ClassDefin parseClassDef(std::vector<Token> stmnt);
+	Definition* parseDefinition(std::vector<Token> stmnt);
+	Statement* parseStatement(std::vector<Token> stmnt);
+	FuncDef parseFunctionDef(std::vector<Token> stmnt);
+	VarDef parseVarDef(std::vector<Token> stmnt);
+	FuncCall parseFunctionCall(std::vector<Token> stmnt);
+	ReturnCall parseFuncReturn(std::vector<Token> stmnt);
+	VarAssign parseVarAsign(std::vector<Token> stmnt);
+	IfStmnt parseIfStmnt(std::vector<Token> stmnt);
+	ElseStmnt parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec);
+	WhileStmnt parseWhileStmnt(std::vector<Token> stmnt);
+
+	bool resolveAST(ClassDefin *root);
+
+	void printErrorMsg(std::string msg, Token t);
+
 	Lexer lex;
-	x86Generator gen = x86Generator();
+	x86Generator gen;
+	Resolver res;
 };
 
