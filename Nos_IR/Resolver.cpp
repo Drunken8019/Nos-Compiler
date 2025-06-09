@@ -97,12 +97,16 @@ void Resolver::visit(Expression* node, std::string des)
 }
 void Resolver::visit(VarAssign* node) 
 {
-	auto r = st->find(node->t.value);
-	if (r == st->end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
+	//auto r = st->find(node->t.value);
+	//if (r == st->end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
     node->expr.accept(this);
 }
 void Resolver::visit(FuncCall* node) 
 {
+    for(Expression &e : node->params)
+    {
+        e.accept(this);
+    }
 	return;
 }
 void Resolver::visit(ReturnCall* node) 
@@ -112,6 +116,7 @@ void Resolver::visit(ReturnCall* node)
 }
 void Resolver::visit(IfStmnt* node) 
 {
+    followerCount = 0;
     std::unordered_map<std::string, Variable> prevSymTable = *st;
 
     node->cond.accept(this);
@@ -120,13 +125,55 @@ void Resolver::visit(IfStmnt* node)
     {
         s->accept(this);
     }
+    if(node->next != nullptr)
+    {
+        node->next->accept(this);
+    }
+    node->followerCount = followerCount;
+    node->symbolTable = *st;
+    *st = prevSymTable;
+}
+void Resolver::visit(ElIfStmnt* node)
+{
+    std::unordered_map<std::string, Variable> prevSymTable = *st;
+    followerCount++;
+    node->cond.accept(this);
+    //Mby check if expr is bool
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    if (node->next != nullptr)
+    {
+        node->next->accept(this);
+    }
     node->symbolTable = *st;
     *st = prevSymTable;
 }
 void Resolver::visit(ElseStmnt* node) 
-{}
+{
+    std::unordered_map<std::string, Variable> prevSymTable = *st;
+    followerCount++;
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    node->symbolTable = *st;
+    *st = prevSymTable;
+}
 void Resolver::visit(WhileStmnt* node) 
-{}
+{
+    std::unordered_map<std::string, Variable> prevSymTable = *st;
+
+    node->cond.accept(this);
+    //Mby check if expr is bool
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    node->symbolTable = *st;
+    *st = prevSymTable;
+}
 void Resolver::visit(ClassDefin* node) 
 {
 	return;
@@ -156,7 +203,10 @@ void Resolver::visit(FuncDef* node)
     std::unordered_map<std::string, Variable>* symTable;
     if(curClass == nullptr)
     {
-        ft = new std::unordered_map<std::string, Function>();
+        if(ft == nullptr)
+        {
+            ft = new std::unordered_map<std::string, Function>();
+        }
         st = new std::unordered_map<std::string, Variable>();
         funcTable = ft;
         symTable = st;

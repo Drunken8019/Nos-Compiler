@@ -13,6 +13,7 @@ public:
 
 	Token emptyTok = { TokenType::COMPILER_EMPTY, "", {0, 0} };
 	Token errTok = { TokenType::COMPILER_ERROR, "", {0, 0} };
+	std::vector<std::string> externs;
 
 	std::vector<Token> getStatement();
 	Root parseRoot(std::vector<Token> stmnt);
@@ -25,10 +26,10 @@ public:
 	ReturnCall parseFuncReturn(std::vector<Token> stmnt);
 	VarAssign parseVarAsign(std::vector<Token> stmnt);
 	IfStmnt parseIfStmnt(std::vector<Token> stmnt);
-	ElseStmnt parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec);
+	ElIfStmnt parseElIfStmnt(std::vector<Token> stmnt);
+	ElseStmnt parseElseStmnt(std::vector<Token> stmnt);
 	WhileStmnt parseWhileStmnt(std::vector<Token> stmnt);
 
-	bool resolveAST(ClassDefin *root);
 
 	void printErrorMsg(std::string msg, Token t);
 

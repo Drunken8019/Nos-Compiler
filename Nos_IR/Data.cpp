@@ -25,7 +25,17 @@ void ReturnCall::accept(Visitor* v)
 	v->visit(this);
 }
 
+void IfFollower::accept(Visitor* v)
+{
+	return;
+}
+
 void IfStmnt::accept(Visitor* v)
+{
+	v->visit(this);
+}
+
+void ElIfStmnt::accept(Visitor* v)
 {
 	v->visit(this);
 }

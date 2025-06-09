@@ -14,7 +14,7 @@ enum TokenType
 	COMPILER_EOF, COMPILER_EMPTY, COMPILER_ERROR,
 	EXPR_DEST, EXPR_TMP,
 	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq,
-	ClassDef, Let, Define, Identifier, Return, If, Else, While, Number
+	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern
 };
 
 enum AST
@@ -93,7 +93,7 @@ class blib
 public:
 	static std::string varOffsetStr(Variable v)
 	{
-		return std::to_string(v.numID * 8 + 32);
+		return std::to_string(v.numID * 8);
 	}
 
 	static std::string asmVar(Variable v)
@@ -172,6 +172,7 @@ class FuncCall : public Statement
 {
 public:
 	std::vector<Expression> params;
+	bool isExtern = false;
 
 	FuncCall()
 	{}
@@ -196,29 +197,62 @@ public:
 	void accept(Visitor* v);
 };
 
+//------------------------- If-Followers -------------------------
+
+class IfFollower : public Statement
+{
+public:
+
+	IfFollower(Token t) : Statement(t)
+	{
+	}
+
+	int endIndex;
+
+	void accept(Visitor* v);
+};
+
 class IfStmnt : public Statement
 {
 public:
 	Expression cond;
 	std::vector<Statement*> body;
 	std::unordered_map<std::string, Variable> symbolTable;
+	IfFollower *next = nullptr;
+	int followerCount = 0;
 
 	IfStmnt(Token t) : Statement(t) {}
 
 	void accept(Visitor* v);
 };
 
-class ElseStmnt : public Statement
+class ElIfStmnt : public IfFollower
 {
 public:
-	IfStmnt prec;
+	Expression cond;
 	std::vector<Statement*> body;
 	std::unordered_map<std::string, Variable> symbolTable;
+	IfFollower* next = nullptr;
 
-	ElseStmnt(Token t) : Statement(t), prec(t){}
+
+	ElIfStmnt(Token t) : IfFollower(t)
+	{}
 
 	void accept(Visitor* v);
 };
+
+class ElseStmnt : public IfFollower
+{
+public:
+	std::vector<Statement*> body;
+	std::unordered_map<std::string, Variable> symbolTable;
+
+	ElseStmnt(Token t) : IfFollower(t){}
+
+	void accept(Visitor* v);
+};
+
+//---------------------------------------------------------------
 
 class WhileStmnt : public Statement
 {

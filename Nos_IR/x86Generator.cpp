@@ -1,18 +1,25 @@
 #include "x86Generator.h"
 
-void x86Generator::printDefaultHeader()
+void x86Generator::printDefaultHeader(std::vector<std::string> externs)
 {
-	*out <<
-		"global main\n"
-		"extern ExitProcess\n"
-		"section .bss\n"
+    *out <<
+        "global main\n"
+        "extern ExitProcess\n";
+
+    for(std::string s : externs)
+    {
+        *out << "extern " + s + "\n";
+    }
+
+    *out << 		
+        "section .bss\n"
 		"section .data\n"
-		"section .text\n";
+        "section .text\n";
 }
 
-void x86Generator::printAST(Root root)
+void x86Generator::printAST(Root root, std::vector<std::string> externs)
 {
-	printDefaultHeader();
+	printDefaultHeader(externs);
 	for(Definition *d : root.defs)
 	{
 		d->accept(this);
@@ -77,13 +84,19 @@ std::string x86Generator::resName(Token t)
     else if(t.type == EXPR_TMP)
     {
         return t.value;
+
     }
     else
     {
         auto s = st.find(t.value);
+        auto f = ft.find(t.value);
         if(s != st.end())
         {
             return blib::asmVar(s->second);
+        }
+        else if(f != ft.end())
+        {
+            return "rax";
         }
     }
     return "not found";
@@ -119,7 +132,7 @@ void x86Generator::visit(Expression* node, std::string des)
         res = "mov qword " + dest + ", " + resName(node->rpn.front()) + "\n";
         node->rpn.pop();
     }
-    while (!node->rpn.empty()) //STOP APPENDING TO RES. WRITE STRAIGHT TO *OUT
+    while (!node->rpn.empty())
     {
         Token t = node->rpn.front();
         rrr.append(t.value);
@@ -133,12 +146,14 @@ void x86Generator::visit(Expression* node, std::string des)
             {
                 if (isCmp(t))
                 {
+                    Token r = operands.top(); operands.pop();
+                    Token l = operands.top(); operands.pop();
 
-                    res.append("cmp qword " + resName(operands.top()) + ", ");
-                    operands.pop();
-                    res.append(resName(operands.top()) + "\n");
+                    res.append("cmp qword " + resName(l) + ", ");
+                    res.append(resName(r) + "\n");
                     res.append(keyWord(t) + " r10b" + "\n");
                     res.append("movzx r10, r10b\n");
+                    operands.push({ EXPR_DEST, dest, t.loc });
                 }
                 else
                 {
@@ -156,11 +171,13 @@ void x86Generator::visit(Expression* node, std::string des)
                 {
                     if (isCmp(t))
                     {
-                        res.append("cmp qword " + resName(operands.top()) + ", ");
-                        operands.pop();
-                        res.append(resName(operands.top()) + "\n");
+                        Token r = operands.top(); operands.pop();
+                        Token l = operands.top(); operands.pop();
+                        res.append("cmp qword " + resName(l) + ", ");
+                        res.append(resName(r) + "\n");
                         res.append(keyWord(t) + " r10b" + "\n");
                         res.append("movzx r10, r10b\n");
+                        operands.push({ EXPR_DEST, dest, t.loc });
                     }
                     else
                     {
@@ -191,12 +208,14 @@ void x86Generator::visit(Expression* node, std::string des)
 
                     if (isCmp(t))
                     {
-                        res.append("cmp qword " + resName(operands.top()) + ", ");
-                        operands.pop();
-                        res.append(resName(operands.top()) + "\n");
-                        res.append(keyWord(t) + " r11b\n");
-                        res.append("movzx r11, r11b\n");
-                        if (operands.top().type == EXPR_DEST) { res.append("mov qword " + dest + ", r11\n"); val = dest; ttype = EXPR_DEST; }
+                        Token r = operands.top(); operands.pop();
+                        Token l = operands.top();
+
+                        res.append("cmp qword " + resName(l) + ", ");
+                        res.append(resName(r) + "\n");
+                        res.append(keyWord(t) + " r10b\n");
+                        res.append("movzx r10, r10b\n");
+                        if (operands.top().type == EXPR_DEST) { val = dest; ttype = EXPR_DEST; }
                     }
                     else
                     {
@@ -232,16 +251,29 @@ void x86Generator::visit(VarAssign* node)
 void x86Generator::visit(FuncCall* node)
 {
 	Function func;
-	auto f = ft.find(node->t.value);
-	if (f == ft.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
-	else func = f->second;
+    if(!node->isExtern)
+    {
+        auto f = ft.find(node->t.value);
+        if (f == ft.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
+        else func = f->second;
+    }
+    else
+    {
+        func = { node->t };
+    }
 	std::string res = "";
+    res.append("sub rsp, 40\n");
 	res.append("call " + func.t.value + "\n");
+    res.append("add rsp, 40\n");
 	*out << res;
 }
 void x86Generator::visit(ReturnCall* node)
 {
-	if (node->expr.tokens.empty()) { *out << "ret\n";  return; }
+    int reqSize = curFunc.stackSize % 16;
+    reqSize += curFunc.stackSize;
+    //reqSize += 40;
+
+	if (node->expr.tokens.empty()) { *out << "add rsp, " + std::to_string(reqSize) + "\nret\n";  return; }
 	std::string res = "";
 	node->expr.des = "[rsp+32]";
 	node->expr.accept(this);
@@ -249,32 +281,107 @@ void x86Generator::visit(ReturnCall* node)
 	if (curFunc.t.value == "main")
 	{
 		res.append("mov rcx, [rsp+32]\n");
+        res.append("sub rsp, 40\n");
 		res.append("call ExitProcess\n");
+        *out << res;
+        return;
+        //res.append("add rsp, 40");
 	}
 	else res.append("mov rax, [rsp+32]\n");
-	int reqSize = curFunc.stackSize % 16;
-	reqSize += curFunc.stackSize;
-	reqSize += 40;
+
 	res.append("add rsp, " + std::to_string(reqSize) + "\n");
 	res.append("ret\n");
 	*out << res;
 }
 void x86Generator::visit(IfStmnt* node)
 {
+    std::unordered_map<std::string, Variable> prevSymTable = st;
+    st = node->symbolTable;
     node->cond.accept(this);
-    *out << "cmp r10, 1\n"
-        "jne .L" + std::to_string(lCount) + "\n";
+
+    lCount++;
+
+    *out << "cmp r10, 0\n"
+        "je .L" + std::to_string(lCount) + "\n";
+    lCount++;
+    int count = lCount;
     for(Statement *s : node->body)
     {
         s->accept(this);
     }
-    *out << ".L" + std::to_string(lCount) + ":\n";
+    if(node->next != nullptr)
+    {
+        *out << "jmp .L" + std::to_string(count) + "\n";
+        *out << ".L" + std::to_string(count-1) + ":\n";
+        node->next->endIndex = count;
+        node->next->accept(this);
+    }
+    *out << ".L" + std::to_string(count) + ":\n";
+        //lCount++;
+    st = prevSymTable;
+}
+void x86Generator::visit(ElIfStmnt* node)
+{
+    std::unordered_map<std::string, Variable> prevSymTable = st;
+    st = node->symbolTable;
     lCount++;
+    //*out << ".L" + std::to_string(count) + ":\n";
+    node->cond.accept(this);
+    *out << "cmp r10, 0\n"
+        "je .L" + std::to_string(lCount) + "\n";
+    lCount++;
+    int count = lCount;
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    if (node->next != nullptr)
+    {
+        *out << "jmp .L" + std::to_string(node->endIndex) + "\n";
+        *out << ".L" + std::to_string(count-1) + ":\n";
+        node->next->endIndex = node->endIndex;
+        node->next->accept(this);
+    }
+    else
+    {
+        *out << ".L" + std::to_string(count-1) + ":\n";
+    }
+    st = prevSymTable;
 }
 void x86Generator::visit(ElseStmnt* node)
-{}
+{
+    std::unordered_map<std::string, Variable> prevSymTable = st;
+    st = node->symbolTable;
+    //lCount++;
+    //*out << ".L" + std::to_string(lCount) + ":\n";
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    st = prevSymTable;
+}
 void x86Generator::visit(WhileStmnt* node)
-{}
+{
+    std::unordered_map<std::string, Variable> prevSymTable = st;
+    st = node->symbolTable;
+    int count = 0;
+
+    wCount++;
+    *out << ".W" + std::to_string(wCount) + ":\n";
+    wCount++;
+    count = wCount;
+
+    node->cond.accept(this);
+    *out << "cmp r10, 0\n"
+        "je .W" + std::to_string(count) + "\n";
+    for (Statement* s : node->body)
+    {
+        s->accept(this);
+    }
+    *out << "jmp .W" + std::to_string(count - 1) + "\n";
+    *out << ".W" + std::to_string(count) + ":\n";
+    st = prevSymTable;
+}
 void x86Generator::visit(ClassDefin* node)
 {
 	st = node->c.classSymbolTable;
@@ -290,11 +397,12 @@ void x86Generator::visit(VarDef* node)
 }
 void x86Generator::visit(FuncDef* node)
 {
+    lCount = 0;
 	std::string res = "";
 	res.append(node->func.t.value + ":\n");
 	int reqSize = node->func.stackSize % 16;
 	reqSize += node->func.stackSize;
-	reqSize += 40;
+	//reqSize += 40;
 	res.append("sub rsp, " + std::to_string(reqSize) + "\n");
 	*out << res;
 	st = node->func.symbolTable;

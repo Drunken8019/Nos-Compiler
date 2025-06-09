@@ -25,8 +25,10 @@ private:
 		{"return", TokenType::Return},
 		{"class", TokenType::ClassDef},
 		{"if", TokenType::If},
+		{"elif", TokenType::Elif},
 		{"else", TokenType::Else},
 		{"while", TokenType::While},
+		{"extern", TokenType::Extern},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {

@@ -48,7 +48,7 @@ void Parser::parse() //When implementing OOP, this will be Class level... The pa
 	
 	//resolveAST(&root);
 	res.resolveAST(&root);
-	gen.printAST(root);
+	gen.printAST(root, externs);
 }
 
 Root Parser::parseRoot(std::vector<Token> stmnt)
@@ -166,11 +166,23 @@ Statement* Parser::parseStatement(std::vector<Token> stmnt)
 		else return new VarAssign(parseVarAsign(stmnt));
 		break;
 
+	case TokenType::Extern:
+		return new FuncCall(parseFunctionCall(stmnt));
+		break;
 	case TokenType::Return:
 		return new ReturnCall(parseFuncReturn(stmnt));
 		break;
 	case TokenType::If:
 		return new IfStmnt(parseIfStmnt(stmnt));
+		break;
+	case TokenType::Elif:
+		printErrorMsg("elif must be preceeded by if or elif", stmnt[0]);
+		break;
+	case TokenType::Else:
+		printErrorMsg("else must be preceeded by if or elif", stmnt[0]);
+		break;
+	case TokenType::While:
+		return new WhileStmnt(parseWhileStmnt(stmnt));
 		break;
 	default:
 		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
@@ -200,7 +212,18 @@ VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 
 FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
 {
-	FuncCall fc = { stmnt[0] };
+	FuncCall fc;
+	if(stmnt[0].type == TokenType::Extern)
+	{
+		fc = { stmnt[1] };
+		fc.isExtern = true;
+		externs.push_back(stmnt[1].value);
+		stmnt.erase(stmnt.begin());
+	}
+	else
+	{
+		fc = { stmnt[0] };
+	}
 	if (stmnt[2].type == TokenType::RParen) return fc;
 
 	int i = 2;
@@ -253,18 +276,86 @@ ReturnCall Parser::parseFuncReturn(std::vector<Token> stmnt)
 IfStmnt Parser::parseIfStmnt(std::vector<Token> stmnt)
 {
 	IfStmnt res = { stmnt[0] };
-	if (stmnt[1].value != "(") { printErrorMsg("Expected \"(\" after if", stmnt[1]); return {errTok}; }
+	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after if", stmnt[1]); return {errTok}; }
 	int i = 2;
 	for(; i<stmnt.size(); i++)
 	{
-		if(stmnt[i].value == ")")
+		if(stmnt[i].type == TokenType::RParen)
 		{
 			break;
 		}
 		res.cond.tokens.push_back(stmnt[i]);
 	}
 	i++;
-	if (stmnt[i].value != "{") { printErrorMsg("Expected \"{\" before if-body", stmnt[i]); return { errTok }; }
+	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before if-body", stmnt[i]); return { errTok }; }
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		res.body.push_back(s);
+		nextStmnt = getStatement();
+	}
+	if(lex.peek().type == TokenType::Elif)
+	{
+		nextStmnt = getStatement();
+		res.next = new ElIfStmnt(parseElIfStmnt(nextStmnt));
+	}
+	else if(lex.peek().type == TokenType::Else)
+	{
+		nextStmnt = getStatement();
+		res.next = new ElseStmnt(parseElseStmnt(nextStmnt));
+	}
+	return res;
+}
+
+ElIfStmnt Parser::parseElIfStmnt(std::vector<Token> stmnt)
+{
+	ElIfStmnt res = stmnt[0];
+	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after elif", stmnt[1]); return { errTok }; }
+	int i = 2;
+	for (; i < stmnt.size(); i++)
+	{
+		if (stmnt[i].type == TokenType::RParen)
+		{
+			break;
+		}
+		res.cond.tokens.push_back(stmnt[i]);
+	}
+	i++;
+	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before elif-body", stmnt[i]); return { errTok }; }
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		res.body.push_back(s);
+		nextStmnt = getStatement();
+	}
+
+	if (lex.peek().type == TokenType::Elif)
+	{
+		nextStmnt = getStatement();
+		res.next = new ElIfStmnt(parseElIfStmnt(nextStmnt));
+	}
+	else if (lex.peek().type == TokenType::Else)
+	{
+		nextStmnt = getStatement();
+		res.next = new ElseStmnt(parseElseStmnt(nextStmnt));
+	}
+	return res;
+}
+
+ElseStmnt Parser::parseElseStmnt(std::vector<Token> stmnt)
+{
+	ElseStmnt res = stmnt[0];
+	if(stmnt[1].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before else-body", stmnt[1]); return { errTok }; }
 	std::vector<Token> nextStmnt = getStatement();
 	while (!nextStmnt.empty())
 	{
@@ -279,14 +370,33 @@ IfStmnt Parser::parseIfStmnt(std::vector<Token> stmnt)
 	return res;
 }
 
-ElseStmnt Parser::parseElseStmnt(std::vector<Token> stmnt, IfStmnt prec)
-{
-	return errTok;
-}
-
 WhileStmnt Parser::parseWhileStmnt(std::vector<Token> stmnt)
 {
-	return errTok;
+	WhileStmnt res = { stmnt[0] };
+	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after while", stmnt[1]); return { errTok }; }
+	int i = 2;
+	for (; i < stmnt.size(); i++)
+	{
+		if (stmnt[i].type == TokenType::RParen)
+		{
+			break;
+		}
+		res.cond.tokens.push_back(stmnt[i]);
+	}
+	i++;
+	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before while-body", stmnt[i]); return { errTok }; }
+	std::vector<Token> nextStmnt = getStatement();
+	while (!nextStmnt.empty())
+	{
+		if (nextStmnt.back().type == TokenType::RCBrace)
+		{
+			break;
+		}
+		Statement* s = parseStatement(nextStmnt);
+		res.body.push_back(s);
+		nextStmnt = getStatement();
+	}
+	return res;
 }
 
 void Parser::printErrorMsg(std::string msg, Token t)
