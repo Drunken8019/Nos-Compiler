@@ -103,6 +103,12 @@ void Resolver::visit(VarAssign* node)
 }
 void Resolver::visit(FuncCall* node) 
 {
+    auto fl = ft->find(node->t.value);
+    if(fl != ft->end())
+    {
+        node->f = fl->second;
+    }
+
     for(Expression &e : node->params)
     {
         e.accept(this);
@@ -184,14 +190,14 @@ void Resolver::visit(VarDef* node)
 	if (r != st->end()) { std::cout << "Variable \"" + node->t.value + "\" already defined in scope\n"; return; }
 	if (curFunc != nullptr)
 	{
-		curFunc->stackSize += node->var.size;
-		node->var.numID = curFunc->varCount;
+        node->var.numID = curFunc->stackSize;
+		curFunc->stackSize += node->var.type.size;
 		curFunc->varCount++;
 	}
 	else
 	{
-		curClass->stackSize += node->var.size;
-		node->var.numID = curClass->varCount;
+        node->var.numID = curClass->stackSize;
+		curClass->stackSize += node->var.type.size;
 		curClass->varCount++;
 	}
 	st->insert({ node->t.value, node->var });

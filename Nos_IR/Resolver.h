@@ -10,6 +10,7 @@ public:
 	Function *curFunc = nullptr;
 	Class *curClass = nullptr;
 	int followerCount = 0;
+	int spaceFor8ALign = 8;
 
 
 	void resolveAST(Root* root);

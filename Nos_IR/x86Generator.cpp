@@ -26,16 +26,62 @@ void x86Generator::printAST(Root root, std::vector<std::string> externs)
 	}
 }
 
+std::string x86Generator::sizeWord(Token var)
+{
+    int size = 0;
+    auto vl = st.find(var.value);
+    if(vl != st.end())
+    {
+        size = vl->second.type.size;
+    }
+
+    switch(size)
+    {
+    case 1:
+        return "byte";
+    case 2:
+        return "word";
+    case 4:
+        return "dword";
+    case 8:
+        return "qword";
+    default:
+        return "";
+    }
+}
+std::string x86Generator::chooseReg(Token var, Register reg)
+{
+    int size = 0;
+    auto vl = st.find(var.value);
+    if (vl != st.end())
+    {
+        size = vl->second.type.size;
+    }
+
+    switch (size)
+    {
+    case 1:
+        return reg.bReg;
+    case 2:
+        return reg.wReg;
+    case 4:
+        return reg.dReg;
+    case 8:
+        return reg.qReg;
+    default:
+        return "";
+    }
+}
 std::string x86Generator::keyWord(Token t)
 {
     switch (t.type)
     {
     case Plus:
-        return "add qword";
+        return "add " + sizeWord(t);
     case Minus:
-        return "sub qword";
+        return "sub " + sizeWord(t);
     case Mult:
-        return "imul qword";
+        return "imul " + sizeWord(t);
     case DEquals:
         return "sete";
     case LDBracket:
@@ -49,7 +95,7 @@ std::string x86Generator::keyWord(Token t)
     case NotEq:
         return "setne";
     }
-    return "ERROR";
+    return "KEYWORD not found";
 }
 bool x86Generator::isCmp(Token t)
 {
@@ -102,24 +148,12 @@ std::string x86Generator::resName(Token t)
     return "not found";
 }
 
-void x86Generator::printMov(std::string type, std::string des, std::string src)
-{
-	if (!type.empty()) type.append(" ");
-	*out << "mov " << type << des << ", " << src << std::endl;
-}
-
-void x86Generator::printAddSubMul(std::string x86Operand, std::string type, std::string des, std::string src)
-{
-	if (!type.empty()) type.append(" ");
-	*out << x86Operand << " " << type << des << ", " << src << std::endl;
-}
-
 void x86Generator::visit(Root* node)
 {
     return;
 }
 
-void x86Generator::visit(Expression* node, std::string des)
+void x86Generator::visit(Expression* node, std::string des) //Make functions for all this fuckass printing bs (mov, movxz, add, sub, mul, div...)
 {
     bool first = true;
     std::string res = "";
@@ -129,7 +163,8 @@ void x86Generator::visit(Expression* node, std::string des)
     std::stack<Token> operands;
     if (node->rpn.size() == 1)
     {
-        res = "mov qword " + dest + ", " + resName(node->rpn.front()) + "\n";
+        //res = "mov " + sizeWord(node->rpn.front()) + " " + dest + ", " + resName(node->rpn.front()) + "\n";
+        mov(r10, node->rpn.front());
         node->rpn.pop();
     }
     while (!node->rpn.empty())
@@ -149,7 +184,7 @@ void x86Generator::visit(Expression* node, std::string des)
                     Token r = operands.top(); operands.pop();
                     Token l = operands.top(); operands.pop();
 
-                    res.append("cmp qword " + resName(l) + ", ");
+                    res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                     res.append(resName(r) + "\n");
                     res.append(keyWord(t) + " r10b" + "\n");
                     res.append("movzx r10, r10b\n");
@@ -157,7 +192,8 @@ void x86Generator::visit(Expression* node, std::string des)
                 }
                 else
                 {
-                    res.append("mov qword " + dest + ", " + resName(operands.top()) + "\n");
+                    //res.append("mov " + sizeWord(operands.top()) + " " + dest + ", " + resName(operands.top()) + "\n");
+                    mov(r10, operands.top());
                     operands.pop();
                     res.append(keyWord(t) + " " + dest + ", " + resName(operands.top()) + "\n");
                     operands.pop();
@@ -173,7 +209,7 @@ void x86Generator::visit(Expression* node, std::string des)
                     {
                         Token r = operands.top(); operands.pop();
                         Token l = operands.top(); operands.pop();
-                        res.append("cmp qword " + resName(l) + ", ");
+                        res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                         res.append(resName(r) + "\n");
                         res.append(keyWord(t) + " r10b" + "\n");
                         res.append("movzx r10, r10b\n");
@@ -192,7 +228,7 @@ void x86Generator::visit(Expression* node, std::string des)
                     operands.pop();
                     if (isCmp(t))
                     {
-                        res.append("cmp qword r11, " + resName(operands.top()) + "\n");
+                        res.append("cmp" + sizeWord(operands.top()) + " ""r11, " + resName(operands.top()) + "\n");
                         res.append(keyWord(t) + " r10b" + "\n");
                         res.append("movzx r10, r10b\n");
                     }
@@ -211,7 +247,7 @@ void x86Generator::visit(Expression* node, std::string des)
                         Token r = operands.top(); operands.pop();
                         Token l = operands.top();
 
-                        res.append("cmp qword " + resName(l) + ", ");
+                        res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                         res.append(resName(r) + "\n");
                         res.append(keyWord(t) + " r10b\n");
                         res.append("movzx r10, r10b\n");
@@ -219,10 +255,15 @@ void x86Generator::visit(Expression* node, std::string des)
                     }
                     else
                     {
-                        if (operands.top().type != EXPR_TMP) res.append("mov qword r11, " + resName(operands.top()) + "\n");
+                        if (operands.top().type != EXPR_TMP) mov(r11, operands.top()); //res.append("mov" + sizeWord(operands.top()) + " " + "r11, " + resName(operands.top()) + "\n");
                         operands.pop();
                         res.append(keyWord(t) + " r11, " + resName(operands.top()) + "\n");
-                        if (operands.top().type == EXPR_DEST) { res.append("mov qword " + dest + ", r11\n"); val = dest; ttype = EXPR_DEST; }
+                        if (operands.top().type == EXPR_DEST) 
+                        { 
+                            res.append("mov " + dest + ", r11\n");
+                            val = dest; 
+                            ttype = EXPR_DEST;
+                        }
                     }
                     operands.pop();
                     operands.push({ ttype, val, {0, 0} });
@@ -275,19 +316,19 @@ void x86Generator::visit(ReturnCall* node)
 
 	if (node->expr.tokens.empty()) { *out << "add rsp, " + std::to_string(reqSize) + "\nret\n";  return; }
 	std::string res = "";
-	node->expr.des = "[rsp+32]";
+	node->expr.des = "[rsp]";
 	node->expr.accept(this);
 
 	if (curFunc.t.value == "main")
 	{
-		res.append("mov rcx, [rsp+32]\n");
+		res.append("mov rcx, [rsp]\n");
         res.append("sub rsp, 40\n");
 		res.append("call ExitProcess\n");
         *out << res;
         return;
         //res.append("add rsp, 40");
 	}
-	else res.append("mov rax, [rsp+32]\n");
+	else res.append("mov rax, [rsp]\n");
 
 	res.append("add rsp, " + std::to_string(reqSize) + "\n");
 	res.append("ret\n");
@@ -412,4 +453,27 @@ void x86Generator::visit(FuncDef* node)
 	{
 		s->accept(this);
 	}
+}
+
+void x86Generator::mov(Token des, Token src)
+{}
+void x86Generator::mov(Token des, Register src)
+{
+    *out << "mov " + sizeWord(des) << resName(des) << ", " << chooseReg(des, src) << "\n";
+}
+void x86Generator::mov(Register des, Token src)
+{
+    *out << "mov " + chooseReg(src, des) << ", " << resName(src) << "\n";
+}
+
+void x86Generator::mov(std::string type, std::string des, std::string src)
+{
+    if (!type.empty()) type.append(" ");
+    *out << "mov " << type << des << ", " << src << "\n";
+}
+
+void x86Generator::arithOp(std::string x86Operand, std::string type, std::string des, std::string src)
+{
+    if (!type.empty()) type.append(" ");
+    *out << x86Operand << " " << type << des << ", " << src << std::endl;
 }

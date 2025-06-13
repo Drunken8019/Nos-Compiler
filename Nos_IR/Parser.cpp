@@ -193,12 +193,12 @@ Statement* Parser::parseStatement(std::vector<Token> stmnt)
 VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 {
 	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return { {stmnt[1], 8}, {{errTok}} }; }
+	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return { {stmnt[1], {}}, {{errTok}} }; }
 	else if (stmnt[2].type == TokenType::Semicolon) 
 	{ 
-		return { {stmnt[1], 8}, {{emptyTok}} };
+		return { {stmnt[1], {}}, {{emptyTok}} };
 	}
-	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return { {stmnt[1], 8}, {{errTok}} }; }
+	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return { {stmnt[1], {}}, {{errTok}} }; }
 	//---------------------------- END ------------------------------
 	Expression e;
 	int i = 3;
@@ -207,7 +207,7 @@ VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 		if (stmnt[i].type == TokenType::Semicolon) break;
 		e.tokens.push_back(stmnt[i]);
 	}
-	return { {stmnt[1], 8}, e};
+	return { {stmnt[1], {}}, e };
 }
 
 FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)

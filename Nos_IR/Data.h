@@ -13,8 +13,8 @@ enum TokenType
 {
 	COMPILER_EOF, COMPILER_EMPTY, COMPILER_ERROR,
 	EXPR_DEST, EXPR_TMP,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq,
-	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern
+	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon,
+	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long
 };
 
 enum AST
@@ -35,18 +35,76 @@ struct Token
 };
 
 //--------------------------- Types -----------------------------
-class Variable
+
+class ExprNode
 {
 public:
-	Token t;
+	virtual std::string getVal() = 0;
+
+	ExprNode()
+	{}
+};
+
+class Register : public ExprNode
+{
+public:
+	int reqSize = 4;
+	std::string qReg;
+	std::string dReg;
+	std::string wReg;
+	std::string bReg;
+
+	Register(std::string q, std::string d, std::string w, std::string b) :
+		qReg(q), dReg(d), wReg(w), bReg(b)
+	{}
+
+	std::string getVal() override
+	{
+		switch(reqSize)
+		{
+		case 1:
+			return bReg;
+		case 2:
+			return wReg;
+		case 4:
+			return dReg;
+		case 8:
+			return qReg;
+		}
+	}
+};
+
+class Type {
+public:
 	int size;
-	int numID;
+	std::string name;
+
+	Type() : size(4), name("int")
+	{
+	}
+
+	Type(int s, std::string n) : size(s), name(n)
+	{
+	}
+};
+
+class Variable : public ExprNode
+{
+public:
+	Type type;
+	Token t;
+	int numID = 0;
 
 	Variable()
 	{}
 
-	Variable(Token tok, int s) : size(s), t(tok)
+	Variable(Token tok, Type t) : type(t), t(tok)
 	{
+	}
+
+	std::string getVal() override
+	{
+		return t.value;
 	}
 };
 
@@ -54,19 +112,19 @@ class Function
 {
 public:
 	Token t;
+	Type retType;
 	std::unordered_map<std::string, Variable> symbolTable;
 	std::unordered_map<std::string, Function>* functionTable;
-	int retSize;
 	int stackSize = 8;
 	int varCount = 1;
 
 	Function()
 	{}
 
-	Function(Token tok) : retSize(0), t(tok)
+	Function(Token tok) : t(tok)
 	{}
 
-	Function(Token tok, int size) : retSize(size), t(tok)
+	Function(Token tok, Type ret) : t(tok), retType(ret)
 	{}
 };
 
@@ -93,7 +151,7 @@ class blib
 public:
 	static std::string varOffsetStr(Variable v)
 	{
-		return std::to_string(v.numID * 8);
+		return std::to_string(v.numID);
 	}
 
 	static std::string asmVar(Variable v)
@@ -168,9 +226,12 @@ public:
 	void accept(Visitor* v);
 };
 
-class FuncCall : public Statement
+class FuncCall : public Statement, ExprNode
 {
+private:
+	Register rax = { "rax", "eax", "ax", "al" };
 public:
+	Function f;
 	std::vector<Expression> params;
 	bool isExtern = false;
 
@@ -181,6 +242,23 @@ public:
 	{}
 
 	void accept(Visitor* v);
+
+	std::string getVal() override
+	{
+		switch(f.retType.size)
+		{
+		case 1:
+			return rax.bReg;
+		case 2:
+			return rax.wReg;
+		case 4:
+			return rax.dReg;
+		case 8:
+			return rax.qReg;
+		default:
+			return rax.dReg;
+		}
+	}
 };
 
 class ReturnCall : public Statement

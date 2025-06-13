@@ -10,8 +10,16 @@ public:
 	Function curFunc;
 	int lCount = 0;
 	int wCount = 0;
-	int flCount = 0;
 
+	Register rax = { "rax", "eax", "ax", "al" };
+	Register rbx = { "rcx", "ecx", "cx", "cl" };
+	Register rdx = { "rdx", "edx", "dx", "dl" };
+	Register rsi = { "rsi", "esi", "si", "sil" };
+	Register rdi = { "rdi", "edi", "di", "dil" };
+	Register r8 = { "r8", "r8d", "r8w", "r8b" };
+	Register r9 = { "r9", "r9d", "r9w", "r9b" };
+	Register r10 = { "r10", "r10d", "r10w", "r10b" };
+	Register r11 = { "r11", "r11d", "r11w", "r11b" };
 
 	x86Generator(){};
 	x86Generator(std::ofstream* o) : out(o) {};
@@ -19,13 +27,21 @@ public:
 	void printAST(Root root, std::vector<std::string> externs);
 
 	void printDefaultHeader(std::vector<std::string> externs);
+	std::string sizeWord(Token var);
+	std::string chooseReg(Token var, Register reg);
 	std::string keyWord(Token t);
 	bool isCmp(Token t);
 	std::string resName(Token t);
 
-	void printMov(std::string type, std::string des, std::string src);
+	void mov(Token des, Token src);
+	void mov(Token des, Register src);
+	void mov(Register des, Token src);
+	void mov(std::string type, std::string des, std::string src);
 
-	void printAddSubMul(std::string x86Operand, std::string type, std::string des, std::string src);
+	void arithOp(Token op, Token des, Token src);
+	void arithOp(Token op, Token des, Register src);
+	void arithOp(Token op, Register des, Token src);
+	void arithOp(std::string x86Operand, std::string type, std::string des, std::string src);
 
 	void visit(Root* node) override;
 	void visit(Expression* node, std::string des) override;
