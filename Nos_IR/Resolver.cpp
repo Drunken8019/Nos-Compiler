@@ -28,7 +28,7 @@ int Resolver::getPrec(Token t)
         return 1;
     case Minus:
         return 1;
-    case Mult:
+    case Asteriks:
         return 2;
     case Div:
         return 2;
@@ -43,6 +43,82 @@ void Resolver::visit(Root* node)
 
 void Resolver::visit(Expression* node, std::string des)
 {
+    //Function identifiers
+    int fCallCount = 0;
+    std::vector<Token> newTokens;
+    for(int i = 0; i<node->tokens.size(); i++)
+    {
+        if(node->tokens[i].type == Identifier)
+        {
+            if(i+1 < node->tokens.size())
+            {
+                if(node->tokens[i+1].type == LParen)
+                {
+                    int fBegin = i;
+                    FuncCall temp = { {Identifier, node->tokens[i].value, node->tokens[i].loc} };
+                    i+=2;
+
+                    while(node->tokens[i].type != RParen)
+                    {
+                        Expression e = { node->tokens[i] };
+                        
+                        while(node->tokens[i].type != Comma)
+                        {
+                            if (node->tokens[i].type == RParen || i >= node->tokens.size()) break;
+                            e.tokens.push_back(node->tokens[i]);
+                            i++;
+                        }
+                        if(node->tokens[i].type == Comma)
+                        {
+                            i++;
+                        }
+                        e.accept(this);
+                        temp.params.push_back(e);
+                        e.tokens.clear();
+                        if (i >= node->tokens.size()) break;
+                    }
+                    node->exprFnTable.insert({ "f" + std::to_string(fCallCount), temp });
+                    Token t = { Identifier, "f" + std::to_string(fCallCount), {0,0} };
+                    newTokens.push_back(t);
+                    fCallCount++;
+                }
+                else
+                {
+                    newTokens.push_back(node->tokens[i]);
+                }
+            }
+            else
+            {
+                newTokens.push_back(node->tokens[i]);
+            }
+        }
+        else
+        {
+            newTokens.push_back(node->tokens[i]);
+        }
+    }
+    node->tokens = newTokens;
+
+    //UnaryOperators
+    for(int i = 0; i < node->tokens.size(); i++)
+    {
+        if(blib::canBeUnary(node->tokens[i].type))
+        {
+            if(i-1 >= 0)
+            {
+                if(node->tokens[i-1].type != Identifier && node->tokens[i - 1].type != Number)
+                {
+                    node->tokens[i].type = blib::getUnary(node->tokens[i].type);
+                }
+            }
+            else
+            {
+                node->tokens[i].type = blib::getUnary(node->tokens[i].type);
+            }
+        }
+    }
+
+    //RPN
     std::stack<Token> op;
 
     for (Token t : node->tokens)
@@ -108,6 +184,29 @@ void Resolver::visit(FuncCall* node)
     {
         node->f = fl->second;
     }
+
+    /*if (node->f.params.size() > 4) TODO: Stack parameters
+    {
+        int align = 8;
+        for (int i = 4; i < node->f.params.size(); i++)
+        {
+            if (align - node->f.params[i].type.size >= 0)
+            {
+                node->var.numID = curFunc->stackSize;
+                curFunc->stackSize += node->var.type.size;
+                curFunc->varCount++;
+                spaceFor8ALign -= node->var.type.size;
+            }
+            else
+            {
+                curFunc->stackSize += spaceFor8ALign;
+                spaceFor8ALign = 8;
+                node->var.numID = curFunc->stackSize;
+                curFunc->varCount++;
+                spaceFor8ALign -= node->var.type.size;
+            }
+        }
+    }*/
 
     for(Expression &e : node->params)
     {
@@ -190,9 +289,21 @@ void Resolver::visit(VarDef* node)
 	if (r != st->end()) { std::cout << "Variable \"" + node->t.value + "\" already defined in scope\n"; return; }
 	if (curFunc != nullptr)
 	{
-        node->var.numID = curFunc->stackSize;
-		curFunc->stackSize += node->var.type.size;
-		curFunc->varCount++;
+        if(spaceFor8ALign - node->var.type.size >= 0)
+        {
+            node->var.numID = curFunc->stackSize;
+            curFunc->stackSize += node->var.type.size;
+            curFunc->varCount++;
+            spaceFor8ALign -= node->var.type.size;
+        }
+        else
+        {
+            curFunc->stackSize += spaceFor8ALign;
+            spaceFor8ALign = 8;
+            node->var.numID = curFunc->stackSize;
+            curFunc->varCount++;
+            spaceFor8ALign -= node->var.type.size;
+        }
 	}
 	else
 	{
@@ -200,11 +311,22 @@ void Resolver::visit(VarDef* node)
 		curClass->stackSize += node->var.type.size;
 		curClass->varCount++;
 	}
+    if(spaceFor8ALign == 0)
+    {
+        spaceFor8ALign = 8;
+    }
 	st->insert({ node->t.value, node->var });
     node->expr.accept(this);
 }
 void Resolver::visit(FuncDef* node) 
 {
+    Register rcx = { "rcx", "ecx", "cx", "cl" };
+    Register rdx = { "rdx", "edx", "dx", "dl" };
+    Register r8 = { "r8", "r8d", "r8w", "r8b" };
+    Register r9 = { "r9", "r9d", "r9w", "r9b" };
+
+    Register param[4] = { rcx, rdx, r8, r9 };
+
     std::unordered_map<std::string, Function>* funcTable;
     std::unordered_map<std::string, Variable>* symTable;
     if(curClass == nullptr)
@@ -230,8 +352,21 @@ void Resolver::visit(FuncDef* node)
 	node->func.functionTable = funcTable;
 	st = &curFunc->symbolTable;
 	ft = curFunc->functionTable;
+    for(int i = 0; i< node->func.params.size(); i++) //Spill params from reg to stack, This code just tracks space needed for this
+    {
+        if(i < 4)
+        {
+            Expression e;
+            param[i].reqSize = node->func.params[i].type.size;
+            e.tokens.push_back({ EXPR_TMP, param[i].getVal(), {} });
+            VarDef vd = { node->func.params[i], {e}};
+            vd.accept(this);
+            node->func.params[i].numID = vd.var.numID;
+        }
+    }
 	for (Statement* s : node->statements)
 	{
 		s->accept(this);
 	}
+    spaceFor8ALign = 8;
 }

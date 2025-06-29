@@ -32,6 +32,7 @@ public:
 
 
 	void printErrorMsg(std::string msg, Token t);
+	Type getType(Token t);
 
 	Lexer lex;
 	x86Generator gen;

@@ -8,11 +8,13 @@ public:
 	std::unordered_map<std::string, Variable> st;
 	std::unordered_map<std::string, Function> ft;
 	Function curFunc;
+	Expression* curExpr = nullptr;
 	int lCount = 0;
 	int wCount = 0;
+	int curExprResSize = 4;
 
 	Register rax = { "rax", "eax", "ax", "al" };
-	Register rbx = { "rcx", "ecx", "cx", "cl" };
+	Register rcx = { "rcx", "ecx", "cx", "cl" };
 	Register rdx = { "rdx", "edx", "dx", "dl" };
 	Register rsi = { "rsi", "esi", "si", "sil" };
 	Register rdi = { "rdi", "edi", "di", "dil" };
@@ -21,6 +23,8 @@ public:
 	Register r10 = { "r10", "r10d", "r10w", "r10b" };
 	Register r11 = { "r11", "r11d", "r11w", "r11b" };
 
+	Register param[4] = {rcx, rdx, r8, r9};
+
 	x86Generator(){};
 	x86Generator(std::ofstream* o) : out(o) {};
 
@@ -28,9 +32,10 @@ public:
 
 	void printDefaultHeader(std::vector<std::string> externs);
 	std::string sizeWord(Token var);
-	std::string chooseReg(Token var, Register reg);
+	std::string chooseReg(Register reg);
 	std::string keyWord(Token t);
 	bool isCmp(Token t);
+	bool isUnary(Token t);
 	std::string resName(Token t);
 
 	void mov(Token des, Token src);

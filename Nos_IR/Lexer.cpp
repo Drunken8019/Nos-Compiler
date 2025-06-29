@@ -42,7 +42,7 @@ Token Lexer::nextToken()
 			}
 			loc.line++;
 		} while (curLine.empty() || isOnlyWhitespace(curLine));
-		Lexer::loadTokens(curLine);
+		loadTokens(curLine);
 	}
 
 	if(!tokenBuffer.empty())
@@ -73,7 +73,7 @@ Token Lexer::peek()
 			}
 			loc.line++;
 		} while (curLine.empty() || isOnlyWhitespace(curLine));
-		Lexer::loadTokens(curLine);
+		loadTokens(curLine);
 	}
 
 	if (!tokenBuffer.empty()) result = tokenBuffer.front();
@@ -86,8 +86,27 @@ bool Lexer::loadTokens(std::string curLine)
 	{
 		auto sFound = symbols.find(curLine[i]);
 		if (sFound != symbols.end()) 
-		{ 
-			tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} }); 
+		{
+			if (i+1 < curLine.length())
+			{
+				std::string cs = "";
+				cs.append(1, curLine[i]);
+				cs.append(1, curLine[i + 1]);
+				auto csFound = compoundSymbols.find(cs);
+				if(csFound != compoundSymbols.end())
+				{
+					tokenBuffer.push({ csFound->second, {csFound->first}, {loc.line, i} });
+					i++;
+				}
+				else
+				{
+					tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+				}
+			}
+			else
+			{
+				tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+			}
 		}
 		else
 		{
@@ -116,6 +135,10 @@ bool Lexer::loadTokens(std::string curLine)
 				auto kFound = keywords.find(temp);
 				if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
 				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
+			}
+			else if(!std::isspace(curLine[i]))
+			{
+				std::cout << "Illegal character \"" << curLine[i] << "\"\n";
 			}
 		}
 	}

@@ -35,7 +35,7 @@ std::string x86Generator::sizeWord(Token var)
         size = vl->second.type.size;
     }
 
-    switch(size)
+    switch(curExprResSize)
     {
     case 1:
         return "byte";
@@ -46,19 +46,12 @@ std::string x86Generator::sizeWord(Token var)
     case 8:
         return "qword";
     default:
-        return "";
+        return "sizeERR";
     }
 }
-std::string x86Generator::chooseReg(Token var, Register reg)
+std::string x86Generator::chooseReg(Register reg)
 {
-    int size = 0;
-    auto vl = st.find(var.value);
-    if (vl != st.end())
-    {
-        size = vl->second.type.size;
-    }
-
-    switch (size)
+    switch (curExprResSize)
     {
     case 1:
         return reg.bReg;
@@ -69,19 +62,23 @@ std::string x86Generator::chooseReg(Token var, Register reg)
     case 8:
         return reg.qReg;
     default:
-        return "";
+        return "regErr";
     }
 }
 std::string x86Generator::keyWord(Token t)
 {
     switch (t.type)
     {
+    case Equals:
+        return "mov";
+    case UAmpersand:
+        return "lea";
     case Plus:
-        return "add " + sizeWord(t);
+        return "add";
     case Minus:
-        return "sub " + sizeWord(t);
-    case Mult:
-        return "imul " + sizeWord(t);
+        return "sub";
+    case Asteriks:
+        return "imul";
     case DEquals:
         return "sete";
     case LDBracket:
@@ -117,6 +114,20 @@ bool x86Generator::isCmp(Token t)
     return false;
 }
 
+bool x86Generator::isUnary(Token t)
+{
+    switch(t.type)
+    {
+    case UAmpersand:
+        return true;
+    case UAsteriks:
+        return true;
+    default:
+        return false;
+
+    }
+}
+
 std::string x86Generator::resName(Token t)
 {
     if(t.type == Number)
@@ -135,17 +146,18 @@ std::string x86Generator::resName(Token t)
     else
     {
         auto s = st.find(t.value);
-        auto f = ft.find(t.value);
+        auto f = curExpr->exprFnTable.find(t.value);
         if(s != st.end())
         {
             return blib::asmVar(s->second);
         }
-        else if(f != ft.end())
+        else if(f != curExpr->exprFnTable.end())
         {
-            return "rax";
+            f->second.accept(this);
+            return chooseReg(rax);
         }
     }
-    return "not found";
+    return "Undefined Identifier";
 }
 
 void x86Generator::visit(Root* node)
@@ -155,11 +167,11 @@ void x86Generator::visit(Root* node)
 
 void x86Generator::visit(Expression* node, std::string des) //Make functions for all this fuckass printing bs (mov, movxz, add, sub, mul, div...)
 {
+    Expression* prev = curExpr;
+    curExpr = node; //FIND OUT WHY COPY BY VALUE IS CORRUPTING *node
     bool first = true;
     std::string res = "";
-    std::string rrr = "";
-    std::string dest = "r10";
-    //std::string res = "";
+    std::string dest = chooseReg(r10);
     std::stack<Token> operands;
     if (node->rpn.size() == 1)
     {
@@ -170,14 +182,18 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
     while (!node->rpn.empty())
     {
         Token t = node->rpn.front();
-        rrr.append(t.value);
         if (t.type == Identifier || t.type == Number)
         {
             operands.push(t);
         }
         else
         {
-            if (first)
+            if (isUnary(t))
+            {
+                res.append(keyWord(t) + " " + dest + ", " + resName(operands.top()) + "\n");
+                operands.pop();
+            }
+            else if (first)
             {
                 if (isCmp(t))
                 {
@@ -187,16 +203,18 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
                     res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                     res.append(resName(r) + "\n");
                     res.append(keyWord(t) + " r10b" + "\n");
-                    res.append("movzx r10, r10b\n");
+                    res.append("movzx " + chooseReg(r10) + ", r10b\n");
                     operands.push({ EXPR_DEST, dest, t.loc });
                 }
                 else
                 {
+                    Token r = operands.top(); operands.pop();
+                    Token l = operands.top(); operands.pop();
                     //res.append("mov " + sizeWord(operands.top()) + " " + dest + ", " + resName(operands.top()) + "\n");
-                    mov(r10, operands.top());
-                    operands.pop();
-                    res.append(keyWord(t) + " " + dest + ", " + resName(operands.top()) + "\n");
-                    operands.pop();
+                    mov(r10, l);
+                    //operands.pop();
+                    res.append(keyWord(t) + " " + dest + ", " + resName(r) + "\n");
+                    //operands.pop();
                     operands.push({ EXPR_DEST, dest, t.loc });
                 }
                 first = false;
@@ -212,7 +230,7 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
                         res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                         res.append(resName(r) + "\n");
                         res.append(keyWord(t) + " r10b" + "\n");
-                        res.append("movzx r10, r10b\n");
+                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
                         operands.push({ EXPR_DEST, dest, t.loc });
                     }
                     else
@@ -228,18 +246,18 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
                     operands.pop();
                     if (isCmp(t))
                     {
-                        res.append("cmp" + sizeWord(operands.top()) + " ""r11, " + resName(operands.top()) + "\n");
+                        res.append("cmp" + sizeWord(operands.top()) + " " + chooseReg(r11) + ", " + resName(operands.top()) + "\n");
                         res.append(keyWord(t) + " r10b" + "\n");
-                        res.append("movzx r10, r10b\n");
+                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
                     }
                     else
                     {
-                        res.append(keyWord(t) + " " + resName(operands.top()) + ", r11\n");
+                        res.append(keyWord(t) + " " + resName(operands.top()) + ", " + chooseReg(r11) + "\n");
                     }
                 }
                 else
                 {
-                    std::string val = "r11";
+                    std::string val = chooseReg(r11);
                     TokenType ttype = EXPR_TMP;
 
                     if (isCmp(t))
@@ -250,18 +268,18 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
                         res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
                         res.append(resName(r) + "\n");
                         res.append(keyWord(t) + " r10b\n");
-                        res.append("movzx r10, r10b\n");
+                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
                         if (operands.top().type == EXPR_DEST) { val = dest; ttype = EXPR_DEST; }
                     }
                     else
                     {
-                        if (operands.top().type != EXPR_TMP) mov(r11, operands.top()); //res.append("mov" + sizeWord(operands.top()) + " " + "r11, " + resName(operands.top()) + "\n");
+                        if (operands.top().type != EXPR_TMP) mov(r11, operands.top());
                         operands.pop();
-                        res.append(keyWord(t) + " r11, " + resName(operands.top()) + "\n");
-                        if (operands.top().type == EXPR_DEST) 
-                        { 
-                            res.append("mov " + dest + ", r11\n");
-                            val = dest; 
+                        res.append(keyWord(t) + +" " + chooseReg(r11) + ", " + resName(operands.top()) + "\n");
+                        if (operands.top().type == EXPR_DEST)
+                        {
+                            res.append("mov " + dest + ", " + chooseReg(r11) + "\n");
+                            val = dest;
                             ttype = EXPR_DEST;
                         }
                     }
@@ -272,11 +290,12 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
         }
         node->rpn.pop();
     }
-    if(!des.empty())
+    if (!des.empty())
     {
-        res.append("mov " + des + ", r10\n");
+        res.append(keyWord(node->resOperator) + " " + des + ", " + dest + "\n");
     }
     //std::cout << rrr << std::endl;
+    curExpr = prev;
     *out << res;
 }
 void x86Generator::visit(VarAssign* node)
@@ -287,48 +306,67 @@ void x86Generator::visit(VarAssign* node)
 	else var = f->second;
 	//res.append("mov qword [rsp+" + blib::varOffsetStr(var) + "], " + expr.res());
 	node->expr.des = blib::asmVar(var);
+    curExprResSize = var.type.size;
 	node->expr.accept(this);
 }
 void x86Generator::visit(FuncCall* node)
 {
 	Function func;
-    if(!node->isExtern)
+    std::string res = "";
+    int stackSpaceForCall = 0;
+    auto f = ft.find(node->t.value);
+    if (f == ft.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
+    else func = f->second;
+
+    if(!node->params.empty())
     {
-        auto f = ft.find(node->t.value);
-        if (f == ft.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
-        else func = f->second;
+        if (node->params.size() != func.params.size())
+        {
+            std::cout << "Function \"" << func.t.value << "\" takes " << std::to_string(func.params.size()) << " parameters, not " << std::to_string(node->params.size()) << "\n";
+            return;
+        }
+
+        for(int i = 0; i < node->params.size(); i++)
+        {
+            if(i < 4)
+            {
+                curExprResSize = func.params[i].type.size;
+                node->params[i].des = chooseReg(param[i]);
+                node->params[i].accept(this);
+            }
+            else
+            {
+
+            }
+        }
     }
-    else
-    {
-        func = { node->t };
-    }
-	std::string res = "";
-    res.append("sub rsp, 40\n");
+
 	res.append("call " + func.t.value + "\n");
-    res.append("add rsp, 40\n");
 	*out << res;
 }
 void x86Generator::visit(ReturnCall* node)
 {
-    int reqSize = curFunc.stackSize % 16;
+    int reqSize = 16 - (curFunc.stackSize % 16);
     reqSize += curFunc.stackSize;
     //reqSize += 40;
+    curExprResSize = curFunc.retType.size;
 
-	if (node->expr.tokens.empty()) { *out << "add rsp, " + std::to_string(reqSize) + "\nret\n";  return; }
+	if (node->expr.tokens.empty() && curFunc.stackSize != 0) { *out << "add rsp, " + std::to_string(reqSize) + "\nret\n";  return; }
 	std::string res = "";
-	node->expr.des = "[rsp]";
+    //*out << "mov qword [rsp], 0\n";
+    curExprResSize = curFunc.retType.size;
+	node->expr.des = chooseReg(rax);
 	node->expr.accept(this);
 
 	if (curFunc.t.value == "main")
 	{
-		res.append("mov rcx, [rsp]\n");
+		res.append("mov " + chooseReg(rcx) + ", " + chooseReg(rax) + "\n");
         res.append("sub rsp, 40\n");
 		res.append("call ExitProcess\n");
         *out << res;
         return;
         //res.append("add rsp, 40");
 	}
-	else res.append("mov rax, [rsp]\n");
 
 	res.append("add rsp, " + std::to_string(reqSize) + "\n");
 	res.append("ret\n");
@@ -433,22 +471,33 @@ void x86Generator::visit(VarDef* node)
 {
 	std::string res = "";
 	node->expr.des = blib::asmVar(node->var);
+    curExprResSize = node->var.type.size;
 	node->expr.accept(this);
 	return;
 }
 void x86Generator::visit(FuncDef* node)
 {
     lCount = 0;
-	std::string res = "";
-	res.append(node->func.t.value + ":\n");
-	int reqSize = node->func.stackSize % 16;
-	reqSize += node->func.stackSize;
-	//reqSize += 40;
-	res.append("sub rsp, " + std::to_string(reqSize) + "\n");
-	*out << res;
+    wCount = 0;
+    std::string res = "";
+    res.append(node->func.t.value + ":\n");
+    if(node->func.stackSize != 0)
+    {
+        int reqSize = 16 - (node->func.stackSize % 16);
+        reqSize += node->func.stackSize;
+        //reqSize += 40;
+        res.append("sub rsp, " + std::to_string(reqSize) + "\n");
+    }
+    *out << res;
 	st = node->func.symbolTable;
 	ft = *node->func.functionTable;
 	curFunc = node->func;
+    for(int i = 0;i < node->func.params.size(); i++)
+    {
+        curExprResSize = node->func.params[i].type.size;
+        //mov(param[i], node->func.params[i].t);
+        *out << "mov " << blib::asmVar(node->func.params[i]) << ", " << chooseReg(param[i]) << "\n";
+    }
 	for (Statement* s : node->statements)
 	{
 		s->accept(this);
@@ -459,13 +508,12 @@ void x86Generator::mov(Token des, Token src)
 {}
 void x86Generator::mov(Token des, Register src)
 {
-    *out << "mov " + sizeWord(des) << resName(des) << ", " << chooseReg(des, src) << "\n";
+    *out << "mov " + sizeWord(des) << resName(des) << ", " << chooseReg(src) << "\n";
 }
 void x86Generator::mov(Register des, Token src)
 {
-    *out << "mov " + chooseReg(src, des) << ", " << resName(src) << "\n";
+    *out << "mov " + chooseReg(des) << ", " << resName(src) << "\n";
 }
-
 void x86Generator::mov(std::string type, std::string des, std::string src)
 {
     if (!type.empty()) type.append(" ");

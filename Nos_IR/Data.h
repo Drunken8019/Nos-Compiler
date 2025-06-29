@@ -8,13 +8,19 @@
 #include <unordered_map>
 
 class Visitor;
+class FuncCall;
+class Expression;
 
 enum TokenType
 {
 	COMPILER_EOF, COMPILER_EMPTY, COMPILER_ERROR,
-	EXPR_DEST, EXPR_TMP,
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma, Plus, Minus, Mult, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon,
-	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long
+	EXPR_DEST, EXPR_TMP, EXPR_FN,
+	/*Symbols*/
+	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma,
+	Plus, Minus, Asteriks, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
+	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks,
+	/*Keywords*/
+	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long,
 };
 
 enum AST
@@ -36,6 +42,7 @@ struct Token
 
 //--------------------------- Types -----------------------------
 
+//Mby ExprNode will see some use... else expr will just be kept using tokens
 class ExprNode
 {
 public:
@@ -43,6 +50,20 @@ public:
 
 	ExprNode()
 	{}
+};
+
+class Literal : public ExprNode //Operators will be saved as literals
+{
+public:
+	std::string val = "";
+
+	Literal(std::string s) : val(s){}
+	Literal(){}
+
+	std::string getVal() override
+	{
+		return val;
+	}
 };
 
 class Register : public ExprNode
@@ -77,13 +98,15 @@ public:
 class Type {
 public:
 	int size;
+	int nonPointerSize;
 	std::string name;
+	bool isPtr = false;
 
-	Type() : size(4), name("int")
+	Type() : size(4), name("int"), nonPointerSize(4)
 	{
 	}
 
-	Type(int s, std::string n) : size(s), name(n)
+	Type(int s, std::string n) : size(s), name(n), nonPointerSize(s)
 	{
 	}
 };
@@ -115,7 +138,8 @@ public:
 	Type retType;
 	std::unordered_map<std::string, Variable> symbolTable;
 	std::unordered_map<std::string, Function>* functionTable;
-	int stackSize = 8;
+	std::vector<Variable> params;
+	int stackSize = 0;
 	int varCount = 1;
 
 	Function()
@@ -158,6 +182,32 @@ public:
 	{
 		return "[rsp+" + varOffsetStr(v) + "]";
 	}
+
+	static bool canBeUnary(TokenType t)
+	{
+		switch(t)
+		{
+		case Ampersand:
+			return true;
+		case Asteriks:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static TokenType getUnary(TokenType t)
+	{
+		switch (t)
+		{
+		case Ampersand:
+			return UAmpersand;
+		case Asteriks:
+			return UAsteriks;
+		default:
+			return COMPILER_ERROR;
+		}
+	}
 };
 
 //------------------------- AST-Nodes ---------------------------
@@ -180,6 +230,8 @@ public:
 	std::vector<Token> tokens;
 	std::string des = "";
 	std::queue<Token> rpn;
+	std::unordered_map<std::string, FuncCall> exprFnTable;
+	Token resOperator = { Equals, "=", {} };
 
 	Expression()
 	{}
@@ -233,12 +285,12 @@ private:
 public:
 	Function f;
 	std::vector<Expression> params;
-	bool isExtern = false;
+	int paramStackSpace = 0;
 
 	FuncCall()
 	{}
 
-	FuncCall(Token t) : Statement(t)
+	FuncCall(Token t) : Statement(t), f(t)
 	{}
 
 	void accept(Visitor* v);
@@ -405,7 +457,7 @@ class FuncDef : public Definition
 public:
 	Function func;
 	std::vector<Statement*> statements;
-	std::vector<Expression> params;
+
 	int stackSpace = 0;
 
 	FuncDef()

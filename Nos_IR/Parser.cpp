@@ -12,7 +12,7 @@ std::vector<Token> Parser::getStatement()
 	std::vector<Token> result;
 	while (curToken.type != TokenType::COMPILER_EOF)
 	{
-		std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
+		//std::cout << curToken.value << "\t" << curToken.type << "\t" << curToken.loc.line << " : " << curToken.loc.column << std::endl; //----DEBUG
 		switch (curToken.type)
 		{
 		case TokenType::LCBrace:
@@ -35,7 +35,7 @@ std::vector<Token> Parser::getStatement()
 	return result;
 }
 
-void Parser::parse() //When implementing OOP, this will be Class level... The parse Root will be moved 1 up then
+void Parser::parse()
 {
 	Root root;
 	std::vector<int> scopes;
@@ -80,7 +80,6 @@ ClassDefin Parser::parseClassDef(std::vector<Token> stmnt)
 		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
 
 		Definition* d = parseDefinition(nextStmnt);
-		//d->resolve(new Class()); SLICED
 		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
 		nextStmnt = getStatement();
 	}
@@ -98,11 +97,9 @@ Definition* Parser::parseDefinition(std::vector<Token> stmnt)
 		return d;
 		break;
 	}
-
 	case TokenType::Define:
 	{
 		Definition* d = new FuncDef(parseFunctionDef(stmnt));
-		//d->resolve(new Class()); SLICED
 		return d;
 		break;
 	}
@@ -118,22 +115,34 @@ Definition* Parser::parseDefinition(std::vector<Token> stmnt)
 
 FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 {
+	Type t;
 	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"def\"", stmnt[1]); return { errTok }; }
-	else if (stmnt[2].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[1]); return { errTok }; }
+	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"def\"", stmnt[1]); return { errTok }; }
+	else
+	{
+		t = getType(stmnt[2]);
+	}
+	if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
+	else if (stmnt[4].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
 	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
 	//---------------------------- END ------------------------------
-	Expression e;
-	FuncDef fd = { stmnt[1] };
-	for (int i = 3; i < stmnt.size(); i++)
+	Variable v = { emptyTok, {} };
+	FuncDef fd = { stmnt[3] };
+	fd.func.retType = t;
+	for (int i = 5; i < stmnt.size()-1; i++)
 	{
 		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
 		{
-			e.tokens.push_back(stmnt[i]);
+			v.type = getType(stmnt[i]);
+			v.t = stmnt[i + 1];
+			i++;
 		}
 		else
 		{
-			fd.params.push_back(e);
+			if(v.t.type != COMPILER_EMPTY)
+			{
+				fd.func.params.push_back(v);
+			}
 		}
 		//fd.params.push_back(e);
 	}
@@ -149,7 +158,6 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 		fd.statements.push_back(s);
 		nextStmnt = getStatement();
 	}
-	//fd.resolve(new Class()); FINE
 	return fd;
 }
 
@@ -192,44 +200,79 @@ Statement* Parser::parseStatement(std::vector<Token> stmnt)
 
 VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 {
+	Type t;
 	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"let\"", stmnt[1]); return { {stmnt[1], {}}, {{errTok}} }; }
-	else if (stmnt[2].type == TokenType::Semicolon) 
-	{ 
-		return { {stmnt[1], {}}, {{emptyTok}} };
+	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"let\"", stmnt[1]); return { {stmnt[3], {}}, {{errTok}} }; }
+	else	
+	{
+		switch(stmnt[2].type)
+		{
+		case TokenType::Character:
+			t.size = 1;
+			t.name = "char";
+			break;
+		case TokenType::Short:
+			t.size = 2;
+			t.name = "short";
+			break;
+		case TokenType::Integer:
+			t.size = 4;
+			t.name = "int";
+			break;
+		case TokenType::Long:
+			t.size = 8;
+			t.name = "long";
+			break;
+		}
 	}
-	else if (stmnt[2].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[2]); return { {stmnt[1], {}}, {{errTok}} }; }
-	//---------------------------- END ------------------------------
+	Variable v = { stmnt[3], {t} };
 	Expression e;
-	int i = 3;
+	int i = 4;
+	if (stmnt[3].type == TokenType::Asteriks) 
+	{ 
+		v.type.isPtr = true;
+		v.type.size = 8;
+		i++;
+		v.t = stmnt[4];
+		if (stmnt[4].type != TokenType::Identifier)
+		{
+			printErrorMsg("Expected identifier", stmnt[3]); 
+			return { {stmnt[3], {}}, {{errTok}} };
+		}
+	}
+	else if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { {stmnt[3], {}}, {{errTok}} }; }
+
+	else if (stmnt[i].type == TokenType::Semicolon) 
+	{ 
+		return { {stmnt[i-1], {}}, {{emptyTok}}};
+	}
+	else if (stmnt[i].type != TokenType::Equals) { printErrorMsg("Expected \"=\" or \";\"", stmnt[i]); return { {stmnt[i-1], {}}, {{errTok}} }; }
+	//---------------------------- END ------------------------------
+	
+	i++;
 	for(; i<stmnt.size(); i++)
 	{
 		if (stmnt[i].type == TokenType::Semicolon) break;
 		e.tokens.push_back(stmnt[i]);
 	}
-	return { {stmnt[1], {}}, e };
+	return { v, e };
 }
 
 FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
 {
 	FuncCall fc;
-	if(stmnt[0].type == TokenType::Extern)
-	{
-		fc = { stmnt[1] };
-		fc.isExtern = true;
-		externs.push_back(stmnt[1].value);
-		stmnt.erase(stmnt.begin());
-	}
-	else
-	{
-		fc = { stmnt[0] };
-	}
-	if (stmnt[2].type == TokenType::RParen) return fc;
+	fc = { stmnt[0] };
+	if (stmnt[1].type ==TokenType::LParen && stmnt[2].type == TokenType::RParen) return fc;
 
 	int i = 2;
-	Expression e;
-	for(; i<stmnt.size(); i++)
+	Expression e = {stmnt[i]};
+	for (; i < stmnt.size(); i++)
 	{
+		if (stmnt[i].type == TokenType::RParen) 
+		{
+			fc.params.push_back(e);
+			break;
+		}
 		if(stmnt[i].type != TokenType::Comma)
 		{
 			e.tokens.push_back(stmnt[i]);
@@ -237,6 +280,7 @@ FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
 		else
 		{
 			fc.params.push_back(e);
+			e.tokens.clear();
 		}
 	}
 	return fc;
@@ -244,11 +288,32 @@ FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
 
 VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
 {
-	
-	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
-	else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
 	Expression e;
-	VarAssign va = { stmnt[0], e };
+	VarAssign va = { stmnt[0], {} };
+	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
+	//else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
+	switch(stmnt[1].type)
+	{
+	case Equals:
+		e.resOperator = { Equals, "=", {} };
+		break;
+	case PlusEq:
+		e.resOperator = { Plus, "+=", {} };
+		break;
+	case MinusEq:
+		e.resOperator = { Minus, "-=", {} };
+		break;
+	case MultEq:
+		e.resOperator = { Asteriks, "*=", {} };
+		break;
+	case DivEq:
+		e.resOperator = { Div, "/=", {} };
+		break;
+	default:
+		printErrorMsg("Expected assignment operator", stmnt[1]); 
+		return { errTok, {} };
+	}
+	
 	int i = 2;
 	for(; i<stmnt.size(); i++)
 	{
@@ -404,4 +469,29 @@ void Parser::printErrorMsg(std::string msg, Token t)
 	std::cout << std::endl;
 	std::cout << msg << std::endl;
 	std::cout << "- Occured at line " << t.loc.line << " and column " << t.loc.column << std::endl;
+}
+
+Type Parser::getType(Token tok)
+{
+	Type t;
+	switch (tok.type)
+	{
+	case TokenType::Character:
+		t.size = 1;
+		t.name = "char";
+		break;
+	case TokenType::Short:
+		t.size = 2;
+		t.name = "short";
+		break;
+	case TokenType::Integer:
+		t.size = 4;
+		t.name = "int";
+		break;
+	case TokenType::Long:
+		t.size = 8;
+		t.name = "long";
+		break;
+	}
+	return t;
 }

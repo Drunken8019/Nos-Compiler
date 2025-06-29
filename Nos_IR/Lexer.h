@@ -45,11 +45,25 @@ private:
 		{',', TokenType::Comma},
 		{'+', TokenType::Plus},
 		{'-', TokenType::Minus},
-		{'*', TokenType::Mult},
+		{'*', TokenType::Asteriks},
 		{'/', TokenType::Div},
 		{'<', TokenType::LDBracket},
 		{'>', TokenType::RDBracket},
 		{':', TokenType::Colon},
+		{'&', TokenType::Ampersand},
+		{'|', TokenType::Pipe},
+	};
+
+	std::unordered_map<std::string, TokenType> compoundSymbols = {
+		{"==", TokenType::DEquals},
+		{"<=", TokenType::LDBEq},
+		{">=", TokenType::RDBEq},
+		{"+=", TokenType::RDBEq},
+		{"-=", TokenType::RDBEq},
+		{"/=", TokenType::RDBEq},
+		{"*=", TokenType::RDBEq},
+		{"&&", TokenType::DAmpersand},
+		{"||", TokenType::DPipe},
 	};
 };
 

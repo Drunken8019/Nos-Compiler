@@ -12,7 +12,6 @@ public:
 	int followerCount = 0;
 	int spaceFor8ALign = 8;
 
-
 	void resolveAST(Root* root);
 	int getPrec(Token t);
 
