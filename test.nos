@@ -1,7 +1,12 @@
 def:int main()
 {
-	let:int x = 20 * (10 - 3 * 2);
-	let:int* y = &x;
-	return y;
+	let:int x = 99;
+	test(&x);
+	return x;
 }
 
+def:char test(int* abc)
+{
+	*abc = 123;
+	return 0;
+}

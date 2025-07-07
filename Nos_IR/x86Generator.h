@@ -11,7 +11,7 @@ public:
 	Expression* curExpr = nullptr;
 	int lCount = 0;
 	int wCount = 0;
-	int curExprResSize = 4;
+	int curExprSize = 4;
 
 	Register rax = { "rax", "eax", "ax", "al" };
 	Register rcx = { "rcx", "ecx", "cx", "cl" };
@@ -22,6 +22,8 @@ public:
 	Register r9 = { "r9", "r9d", "r9w", "r9b" };
 	Register r10 = { "r10", "r10d", "r10w", "r10b" };
 	Register r11 = { "r11", "r11d", "r11w", "r11b" };
+	Register r12 = { "r12", "r12d", "r12w", "r12b" };
+	Register ptrR12 = { "[r12]", "[r12]", "[r12]", "[r12]" };
 
 	Register param[4] = {rcx, rdx, r8, r9};
 
@@ -36,11 +38,13 @@ public:
 	std::string keyWord(Token t);
 	bool isCmp(Token t);
 	bool isUnary(Token t);
+	bool isBinary(Token t);
 	std::string resName(Token t);
 
 	void mov(Token des, Token src);
 	void mov(Token des, Register src);
 	void mov(Register des, Token src);
+	void mov(Register des, Register src);
 	void mov(std::string type, std::string des, std::string src);
 
 	void arithOp(Token op, Token des, Token src);

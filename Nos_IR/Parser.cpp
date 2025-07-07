@@ -134,6 +134,12 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
 		{
 			v.type = getType(stmnt[i]);
+			if(stmnt[i + 1].type == Asteriks)
+			{
+				v.type.isPtr = true;
+				v.type.size = 8;
+				stmnt.erase(stmnt.begin() + i + 1);
+			}
 			v.t = stmnt[i + 1];
 			i++;
 		}
@@ -191,6 +197,9 @@ Statement* Parser::parseStatement(std::vector<Token> stmnt)
 		break;
 	case TokenType::While:
 		return new WhileStmnt(parseWhileStmnt(stmnt));
+		break;
+	case TokenType::Asteriks:
+		return new VarAssign(parseVarAsign(stmnt));
 		break;
 	default:
 		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
@@ -290,6 +299,12 @@ VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
 {
 	Expression e;
 	VarAssign va = { stmnt[0], {} };
+	if (stmnt[0].type == TokenType::Asteriks)
+	{
+		va.t = stmnt[1];
+		va.isPtrAccess = true;
+		stmnt.erase(stmnt.begin());
+	}
 	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
 	//else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
 	switch(stmnt[1].type)

@@ -35,7 +35,7 @@ std::string x86Generator::sizeWord(Token var)
         size = vl->second.type.size;
     }
 
-    switch(curExprResSize)
+    switch(curExprSize)
     {
     case 1:
         return "byte";
@@ -51,7 +51,7 @@ std::string x86Generator::sizeWord(Token var)
 }
 std::string x86Generator::chooseReg(Register reg)
 {
-    switch (curExprResSize)
+    switch (curExprSize)
     {
     case 1:
         return reg.bReg;
@@ -118,14 +118,36 @@ bool x86Generator::isUnary(Token t)
 {
     switch(t.type)
     {
-    case UAmpersand:
-        return true;
-    case UAsteriks:
-        return true;
     default:
         return false;
 
     }
+}
+
+bool x86Generator::isBinary(Token t)
+{
+    switch (t.type)
+    {
+    case Plus:
+        return true;
+    case Minus:
+        return true;
+    case Asteriks:
+        return true;
+    case DEquals:
+        return true;
+    case LDBracket:
+        return true;
+    case RDBracket:
+        return true;
+    case LDBEq:
+        return true;
+    case RDBEq:
+        return true;
+    case NotEq:
+        return true;
+    }
+    return false;
 }
 
 std::string x86Generator::resName(Token t)
@@ -136,7 +158,18 @@ std::string x86Generator::resName(Token t)
     }
     else if(t.type == EXPR_DEST)
     {
-        return t.value;
+        if (t.value == "r10")
+        {
+            return chooseReg(r10);
+        }
+        else if (t.value == "r11")
+        {
+            return chooseReg(r11);
+        }
+        else if(t.value == "ptrR12")
+        {
+            return chooseReg(ptrR12);
+        }
     }
     else if(t.type == EXPR_TMP)
     {
@@ -169,130 +202,111 @@ void x86Generator::visit(Expression* node, std::string des) //Make functions for
 {
     Expression* prev = curExpr;
     curExpr = node; //FIND OUT WHY COPY BY VALUE IS CORRUPTING *node
-    bool first = true;
     std::string res = "";
-    std::string dest = chooseReg(r10);
-    std::stack<Token> operands;
+    std::vector<Token> tokens;
+    Token operand;
+    Token tr10 = { EXPR_DEST, "r10", {} };
+    Token tr12 = { EXPR_DEST, "ptrR12", {} };
     if (node->rpn.size() == 1)
     {
-        //res = "mov " + sizeWord(node->rpn.front()) + " " + dest + ", " + resName(node->rpn.front()) + "\n";
         mov(r10, node->rpn.front());
-        node->rpn.pop();
+        *out << "mov " + des + ", " + chooseReg(r10) + "\n";
+        //mov r10 to des
+        return;
     }
+
     while (!node->rpn.empty())
     {
-        Token t = node->rpn.front();
-        if (t.type == Identifier || t.type == Number)
-        {
-            operands.push(t);
-        }
-        else
-        {
-            if (isUnary(t))
-            {
-                res.append(keyWord(t) + " " + dest + ", " + resName(operands.top()) + "\n");
-                operands.pop();
-            }
-            else if (first)
-            {
-                if (isCmp(t))
-                {
-                    Token r = operands.top(); operands.pop();
-                    Token l = operands.top(); operands.pop();
-
-                    res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
-                    res.append(resName(r) + "\n");
-                    res.append(keyWord(t) + " r10b" + "\n");
-                    res.append("movzx " + chooseReg(r10) + ", r10b\n");
-                    operands.push({ EXPR_DEST, dest, t.loc });
-                }
-                else
-                {
-                    Token r = operands.top(); operands.pop();
-                    Token l = operands.top(); operands.pop();
-                    //res.append("mov " + sizeWord(operands.top()) + " " + dest + ", " + resName(operands.top()) + "\n");
-                    mov(r10, l);
-                    //operands.pop();
-                    res.append(keyWord(t) + " " + dest + ", " + resName(r) + "\n");
-                    //operands.pop();
-                    operands.push({ EXPR_DEST, dest, t.loc });
-                }
-                first = false;
-            }
-            else
-            {
-                if (operands.top().type == EXPR_DEST)
-                {
-                    if (isCmp(t))
-                    {
-                        Token r = operands.top(); operands.pop();
-                        Token l = operands.top(); operands.pop();
-                        res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
-                        res.append(resName(r) + "\n");
-                        res.append(keyWord(t) + " r10b" + "\n");
-                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
-                        operands.push({ EXPR_DEST, dest, t.loc });
-                    }
-                    else
-                    {
-                        operands.pop();
-                        res.append(keyWord(t) + " " + dest + ", " + resName(operands.top()) + "\n");
-                        operands.pop();
-                        operands.push({ EXPR_DEST, dest, t.loc });
-                    }
-                }
-                else if (operands.top().type == EXPR_TMP)
-                {
-                    operands.pop();
-                    if (isCmp(t))
-                    {
-                        res.append("cmp" + sizeWord(operands.top()) + " " + chooseReg(r11) + ", " + resName(operands.top()) + "\n");
-                        res.append(keyWord(t) + " r10b" + "\n");
-                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
-                    }
-                    else
-                    {
-                        res.append(keyWord(t) + " " + resName(operands.top()) + ", " + chooseReg(r11) + "\n");
-                    }
-                }
-                else
-                {
-                    std::string val = chooseReg(r11);
-                    TokenType ttype = EXPR_TMP;
-
-                    if (isCmp(t))
-                    {
-                        Token r = operands.top(); operands.pop();
-                        Token l = operands.top();
-
-                        res.append("cmp " + sizeWord(l) + " " + resName(l) + ", ");
-                        res.append(resName(r) + "\n");
-                        res.append(keyWord(t) + " r10b\n");
-                        res.append("movzx " + chooseReg(r10) + ", r10b\n");
-                        if (operands.top().type == EXPR_DEST) { val = dest; ttype = EXPR_DEST; }
-                    }
-                    else
-                    {
-                        if (operands.top().type != EXPR_TMP) mov(r11, operands.top());
-                        operands.pop();
-                        res.append(keyWord(t) + +" " + chooseReg(r11) + ", " + resName(operands.top()) + "\n");
-                        if (operands.top().type == EXPR_DEST)
-                        {
-                            res.append("mov " + dest + ", " + chooseReg(r11) + "\n");
-                            val = dest;
-                            ttype = EXPR_DEST;
-                        }
-                    }
-                    operands.pop();
-                    operands.push({ ttype, val, {0, 0} });
-                }
-            }
-        }
+        tokens.push_back(node->rpn.front());
         node->rpn.pop();
     }
-    if (!des.empty())
+
+    while (tokens.size() > 1)
     {
-        res.append(keyWord(node->resOperator) + " " + des + ", " + dest + "\n");
+        bool reduced = false;
+        for (int i = 0; i < tokens.size(); i++)
+        {
+            if(tokens[i].type == UAmpersand)
+            {
+                *out << "lea " + chooseReg(r10) + ", " + resName(tokens[i-1]) + "\n";
+                if (tokens.size() == 2) tokens.clear();
+                else
+                {
+                    tokens.erase(tokens.begin() + i - 1, tokens.begin() + i);
+                }
+                reduced = true;
+                break;
+            }
+
+            if(tokens[i].type == UAsteriks)
+            {
+                int tempSize = curExprSize;
+                curExprSize = 8;
+                mov(r12, tokens[i - 1]);
+                curExprSize = tempSize;
+
+                if (tokens.size() == 2)
+                {
+                    tokens.clear();
+                    tokens.push_back(tr12);
+                }
+                else
+                {
+                    auto last = tokens.erase(tokens.begin() + i - 1, tokens.begin() + i);
+                    tokens.insert(last, tr12);
+                }
+                reduced = true;
+                break;
+            }
+
+            if (isUnary(tokens[i]) && i >= 1)
+            {
+                operand = tokens[i - 1];
+                //res.append("mov r10, " + resName(operand) + "\n");
+                mov(r10, operand);
+                //*out << (keyWord(tokens[i]) + " " + chooseReg(r10) + "\n");
+                if (tokens.size() == 2) tokens.clear();
+                else
+                {
+                    auto last = tokens.erase(tokens.begin() + i - 1, tokens.begin() + i);
+                    tokens.insert(last, tr10);
+                }
+                reduced = true;
+                break;
+            }
+            else if (isBinary(tokens[i]) && i >= 2)
+            {
+                Token l = tokens[i - 2];
+                Token r = tokens[i - 1];
+                //res.append("mov r11, " + resName(l) + "\n");
+                mov(r11, l);
+                //res.append("mov r10, " + r.value + "\n");
+                //*out << (keyWord(tokens[i]) + " " + chooseReg(r11) + ", " + resName(r) + "\n");
+                arithOp(tokens[i], r11, r);
+                mov(r10, r11);
+                //res.append("mov r10, r11\n");
+                auto last = tokens.erase(tokens.begin() + i - 2, tokens.begin() + i + 1);
+                tokens.insert(last, tr10);
+                reduced = true;
+                break;
+            }
+        }
+        if(!reduced)
+        {
+            std::cout << "Invalid or unsopported expression";
+            return;
+        }
+    }
+    if(!tokens.empty())
+    {
+        if (!des.empty() && tokens.front().value == "ptrR12")
+        {
+            *out << (keyWord(node->resOperator) + " " + des + ", " + chooseReg(ptrR12) + "\n");
+        }
+    }
+    else if (!des.empty())
+    {
+        *out << (keyWord(node->resOperator) + " " + des + ", " + chooseReg(r10) + "\n");
     }
     //std::cout << rrr << std::endl;
     curExpr = prev;
@@ -305,9 +319,19 @@ void x86Generator::visit(VarAssign* node)
 	if (f == st.end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
 	else var = f->second;
 	//res.append("mov qword [rsp+" + blib::varOffsetStr(var) + "], " + expr.res());
-	node->expr.des = blib::asmVar(var);
-    curExprResSize = var.type.size;
-	node->expr.accept(this);
+    if(node->isPtrAccess)
+    {
+        *out << "mov r12, " << blib::asmVar(var) << "\n";
+        node->expr.des = ptrR12.qReg;
+        curExprSize = var.type.nonPointerSize;
+        node->expr.accept(this);
+    }
+    else
+    {
+        node->expr.des = blib::asmVar(var);
+        curExprSize = var.type.size;
+        node->expr.accept(this);
+    }
 }
 void x86Generator::visit(FuncCall* node)
 {
@@ -330,7 +354,7 @@ void x86Generator::visit(FuncCall* node)
         {
             if(i < 4)
             {
-                curExprResSize = func.params[i].type.size;
+                curExprSize = func.params[i].type.size;
                 node->params[i].des = chooseReg(param[i]);
                 node->params[i].accept(this);
             }
@@ -349,12 +373,12 @@ void x86Generator::visit(ReturnCall* node)
     int reqSize = 16 - (curFunc.stackSize % 16);
     reqSize += curFunc.stackSize;
     //reqSize += 40;
-    curExprResSize = curFunc.retType.size;
+    curExprSize = curFunc.retType.size;
 
 	if (node->expr.tokens.empty() && curFunc.stackSize != 0) { *out << "add rsp, " + std::to_string(reqSize) + "\nret\n";  return; }
 	std::string res = "";
     //*out << "mov qword [rsp], 0\n";
-    curExprResSize = curFunc.retType.size;
+    curExprSize = curFunc.retType.size;
 	node->expr.des = chooseReg(rax);
 	node->expr.accept(this);
 
@@ -471,7 +495,7 @@ void x86Generator::visit(VarDef* node)
 {
 	std::string res = "";
 	node->expr.des = blib::asmVar(node->var);
-    curExprResSize = node->var.type.size;
+    curExprSize = node->var.type.size;
 	node->expr.accept(this);
 	return;
 }
@@ -494,9 +518,9 @@ void x86Generator::visit(FuncDef* node)
 	curFunc = node->func;
     for(int i = 0;i < node->func.params.size(); i++)
     {
-        curExprResSize = node->func.params[i].type.size;
-        //mov(param[i], node->func.params[i].t);
-        *out << "mov " << blib::asmVar(node->func.params[i]) << ", " << chooseReg(param[i]) << "\n";
+        curExprSize = node->func.params[i].type.size;
+        mov(node->func.params[i].t, param[i]);
+        //*out << "mov " << blib::asmVar(node->func.params[i]) << ", " << chooseReg(param[i]) << "\n";
     }
 	for (Statement* s : node->statements)
 	{
@@ -508,11 +532,15 @@ void x86Generator::mov(Token des, Token src)
 {}
 void x86Generator::mov(Token des, Register src)
 {
-    *out << "mov " + sizeWord(des) << resName(des) << ", " << chooseReg(src) << "\n";
+    *out << "mov " << resName(des) << ", " << chooseReg(src) << "\n";
 }
 void x86Generator::mov(Register des, Token src)
 {
     *out << "mov " + chooseReg(des) << ", " << resName(src) << "\n";
+}
+void x86Generator::mov(Register des, Register src)
+{
+    *out << "mov " + chooseReg(des) << ", " << chooseReg(src) << "\n";
 }
 void x86Generator::mov(std::string type, std::string des, std::string src)
 {
@@ -520,6 +548,16 @@ void x86Generator::mov(std::string type, std::string des, std::string src)
     *out << "mov " << type << des << ", " << src << "\n";
 }
 
+void x86Generator::arithOp(Token op, Token des, Token src)
+{}
+void x86Generator::arithOp(Token op, Token des, Register src)
+{
+    *out << keyWord(op) << " " << resName(des) << ", " << chooseReg(src) << "\n";
+}
+void x86Generator::arithOp(Token op, Register des, Token src)
+{
+    *out << keyWord(op) << " " << chooseReg(des) << ", " << resName(src) << "\n";
+}
 void x86Generator::arithOp(std::string x86Operand, std::string type, std::string des, std::string src)
 {
     if (!type.empty()) type.append(" ");

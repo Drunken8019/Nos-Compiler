@@ -32,6 +32,10 @@ int Resolver::getPrec(Token t)
         return 2;
     case Div:
         return 2;
+    case UAmpersand:
+        return 3;
+    case UAsteriks:
+        return 3;
     }
     return 0;
 }

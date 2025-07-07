@@ -268,6 +268,7 @@ class VarAssign: public Statement
 {
 public:
 	Expression expr;
+	bool isPtrAccess = false;
 
 	VarAssign()
 	{}
