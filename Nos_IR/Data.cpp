@@ -1,5 +1,7 @@
 #include "Visitor.h"
 
+int blib::offset = 0;
+
 void Expression::accept(Visitor* v)
 {
 	v->visit(this, des);

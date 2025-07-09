@@ -11,6 +11,8 @@ public:
 	Class *curClass = nullptr;
 	int followerCount = 0;
 	int spaceFor8ALign = 8;
+	int scopeOffset = 0;
+	bool reverseStackUsage = false;
 
 	void resolveAST(Root* root);
 	int getPrec(Token t);

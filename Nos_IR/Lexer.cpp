@@ -125,7 +125,7 @@ bool Lexer::loadTokens(std::string curLine)
 			else if (std::isalpha(curLine[i]))
 			{
 				std::string temp;
-				while (std::isalpha(curLine[i]) || std::isdigit(curLine[i]))
+				while (std::isalpha(curLine[i]) || std::isdigit(curLine[i]) || curLine[i] == '_')
 				{
 					temp.append(1, curLine[i]);
 					i++;

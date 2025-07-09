@@ -18,7 +18,7 @@ enum TokenType
 	/*Symbols*/
 	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma,
 	Plus, Minus, Asteriks, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
-	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks,
+	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus,
 	/*Keywords*/
 	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long,
 };
@@ -139,8 +139,10 @@ public:
 	std::unordered_map<std::string, Variable> symbolTable;
 	std::unordered_map<std::string, Function>* functionTable;
 	std::vector<Variable> params;
+	int paramStackSpace = 0;
 	int stackSize = 0;
 	int varCount = 1;
+	bool isExtern = false;
 
 	Function()
 	{}
@@ -173,9 +175,11 @@ public:
 class blib
 {
 public:
+	static int offset;
+
 	static std::string varOffsetStr(Variable v)
 	{
-		return std::to_string(v.numID);
+		return std::to_string(v.numID + offset);
 	}
 
 	static std::string asmVar(Variable v)
@@ -191,6 +195,8 @@ public:
 			return true;
 		case Asteriks:
 			return true;
+		case Minus:
+			return true;
 		default:
 			return false;
 		}
@@ -204,6 +210,8 @@ public:
 			return UAmpersand;
 		case Asteriks:
 			return UAsteriks;
+		case Minus:
+			return UMinus;
 		default:
 			return COMPILER_ERROR;
 		}
@@ -229,6 +237,7 @@ class Expression : public ASTNode
 public:
 	std::vector<Token> tokens;
 	std::string des = "";
+	bool desIsPtrDref = false;
 	std::queue<Token> rpn;
 	std::unordered_map<std::string, FuncCall> exprFnTable;
 	Token resOperator = { Equals, "=", {} };
@@ -286,7 +295,7 @@ private:
 public:
 	Function f;
 	std::vector<Expression> params;
-	int paramStackSpace = 0;
+
 
 	FuncCall()
 	{}

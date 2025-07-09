@@ -103,6 +103,12 @@ Definition* Parser::parseDefinition(std::vector<Token> stmnt)
 		return d;
 		break;
 	}
+	case TokenType::Extern:
+	{
+		Definition* d = new FuncDef(parseExternDef(stmnt));
+		return d;
+		break;
+	}
 	default:
 		//-------------------- Syntax-Error handling --------------------
 		printErrorMsg("Only variable definitions or function definitions allowed", stmnt[0]);
@@ -125,6 +131,7 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 	if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
 	else if (stmnt[4].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
 	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
+	if(stmnt.back().type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt.back()); return { errTok }; }
 	//---------------------------- END ------------------------------
 	Variable v = { emptyTok, {} };
 	FuncDef fd = { stmnt[3] };
@@ -150,7 +157,6 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 				fd.func.params.push_back(v);
 			}
 		}
-		//fd.params.push_back(e);
 	}
 
 	std::vector<Token> nextStmnt = getStatement();
@@ -164,6 +170,50 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 		fd.statements.push_back(s);
 		nextStmnt = getStatement();
 	}
+	return fd;
+}
+
+FuncDef Parser::parseExternDef(std::vector<Token> stmnt)
+{
+	Type t;
+	//-------------------- Syntax-Error handling --------------------
+	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"extern\"", stmnt[1]); return { errTok }; }
+	else
+	{
+		t = getType(stmnt[2]);
+	}
+	if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
+	else if (stmnt[4].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
+	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
+	if (stmnt.back().type != TokenType::Semicolon) { printErrorMsg("Expected \";\"", stmnt.back()); return { errTok }; }
+	//---------------------------- END ------------------------------
+	Variable v = { emptyTok, {} };
+	FuncDef fd = { stmnt[3] };
+	fd.func.retType = t;
+	for (int i = 5; i < stmnt.size() - 1; i++)
+	{
+		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
+		{
+			v.type = getType(stmnt[i]);
+			if (stmnt[i + 1].type == Asteriks)
+			{
+				v.type.isPtr = true;
+				v.type.size = 8;
+				stmnt.erase(stmnt.begin() + i + 1);
+			}
+			v.t = stmnt[i + 1];
+			i++;
+		}
+		else
+		{
+			if (v.t.type != COMPILER_EMPTY)
+			{
+				fd.func.params.push_back(v);
+			}
+		}
+	}
+	fd.func.isExtern = true;
+	externs.push_back(fd.t.value);
 	return fd;
 }
 
@@ -493,18 +543,22 @@ Type Parser::getType(Token tok)
 	{
 	case TokenType::Character:
 		t.size = 1;
+		t.nonPointerSize = 1;
 		t.name = "char";
 		break;
 	case TokenType::Short:
 		t.size = 2;
+		t.nonPointerSize = 2;
 		t.name = "short";
 		break;
 	case TokenType::Integer:
 		t.size = 4;
+		t.nonPointerSize = 4;
 		t.name = "int";
 		break;
 	case TokenType::Long:
 		t.size = 8;
+		t.nonPointerSize = 8;
 		t.name = "long";
 		break;
 	}

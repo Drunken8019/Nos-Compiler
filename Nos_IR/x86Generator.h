@@ -24,6 +24,7 @@ public:
 	Register r11 = { "r11", "r11d", "r11w", "r11b" };
 	Register r12 = { "r12", "r12d", "r12w", "r12b" };
 	Register ptrR12 = { "[r12]", "[r12]", "[r12]", "[r12]" };
+	Register ptrR13 = { "[r13]", "[r13]", "[r13]", "[r13]" };
 
 	Register param[4] = {rcx, rdx, r8, r9};
 

@@ -21,6 +21,7 @@ public:
 	Definition* parseDefinition(std::vector<Token> stmnt);
 	Statement* parseStatement(std::vector<Token> stmnt);
 	FuncDef parseFunctionDef(std::vector<Token> stmnt);
+	FuncDef parseExternDef(std::vector<Token> stmnt);
 	VarDef parseVarDef(std::vector<Token> stmnt);
 	FuncCall parseFunctionCall(std::vector<Token> stmnt);
 	ReturnCall parseFuncReturn(std::vector<Token> stmnt);

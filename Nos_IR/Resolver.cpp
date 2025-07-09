@@ -183,12 +183,6 @@ void Resolver::visit(VarAssign* node)
 }
 void Resolver::visit(FuncCall* node) 
 {
-    auto fl = ft->find(node->t.value);
-    if(fl != ft->end())
-    {
-        node->f = fl->second;
-    }
-
     /*if (node->f.params.size() > 4) TODO: Stack parameters
     {
         int align = 8;
@@ -229,7 +223,6 @@ void Resolver::visit(IfStmnt* node)
     std::unordered_map<std::string, Variable> prevSymTable = *st;
 
     node->cond.accept(this);
-    //Mby check if expr is bool
     for(Statement* s : node->body)
     {
         s->accept(this);
@@ -293,9 +286,32 @@ void Resolver::visit(VarDef* node)
 	if (r != st->end()) { std::cout << "Variable \"" + node->t.value + "\" already defined in scope\n"; return; }
 	if (curFunc != nullptr)
 	{
+        if(reverseStackUsage)
+        {
+            int align = 8;
+            if (align - node->var.type.size >= 0)
+            {
+                curFunc->stackSize -= node->var.type.size;
+                node->var.numID = curFunc->stackSize + scopeOffset;
+                curFunc->varCount++;
+                align -= node->var.type.size;
+            }
+            else
+            {
+                curFunc->stackSize -= align;
+                align = 8;
+                node->var.numID = curFunc->stackSize + scopeOffset;
+                curFunc->varCount++;
+                align -= node->var.type.size;
+            }
+            st->insert({ node->t.value, node->var });
+            node->expr.accept(this);
+            return;
+        }
+
         if(spaceFor8ALign - node->var.type.size >= 0)
         {
-            node->var.numID = curFunc->stackSize;
+            node->var.numID = curFunc->stackSize + scopeOffset;
             curFunc->stackSize += node->var.type.size;
             curFunc->varCount++;
             spaceFor8ALign -= node->var.type.size;
@@ -304,14 +320,14 @@ void Resolver::visit(VarDef* node)
         {
             curFunc->stackSize += spaceFor8ALign;
             spaceFor8ALign = 8;
-            node->var.numID = curFunc->stackSize;
+            node->var.numID = curFunc->stackSize + scopeOffset;
             curFunc->varCount++;
             spaceFor8ALign -= node->var.type.size;
         }
 	}
 	else
 	{
-        node->var.numID = curClass->stackSize;
+        node->var.numID = curClass->stackSize + scopeOffset;
 		curClass->stackSize += node->var.type.size;
 		curClass->varCount++;
 	}
@@ -351,12 +367,11 @@ void Resolver::visit(FuncDef* node)
 	curFunc = &node->func;
 	auto r = funcTable->find(node->t.value);
 	if (r != funcTable->end()) { std::cout << "Function \"" + node->t.value + "\" already defined in scope\n"; return; }
-    funcTable->insert({ node->t.value, node->func });
     node->func.symbolTable = *symTable;
 	node->func.functionTable = funcTable;
 	st = &curFunc->symbolTable;
 	ft = curFunc->functionTable;
-    for(int i = 0; i< node->func.params.size(); i++) //Spill params from reg to stack, This code just tracks space needed for this
+    for(int i = 0; i< node->func.params.size(); i++)
     {
         if(i < 4)
         {
@@ -367,10 +382,79 @@ void Resolver::visit(FuncDef* node)
             vd.accept(this);
             node->func.params[i].numID = vd.var.numID;
         }
+        else
+        {
+            int align = 8;
+            if (align - node->func.params[i].type.size >= 0)
+            {
+                node->func.paramStackSpace += node->func.params[i].type.size;
+                align -= node->func.params[i].type.size;
+            }
+            else
+            {
+                node->func.paramStackSpace += align;
+                align = 8;
+                align -= node->func.params[i].type.size;
+            }
+        }
     }
+    int reqSizeParam = 0;
+    /*if (node->func.paramStackSpace % 16 == 0)
+    {
+        reqSizeParam = node->func.paramStackSpace;
+    }
+    else
+    {
+        reqSizeParam = 16 - (node->func.paramStackSpace % 16);
+        reqSizeParam += node->func.paramStackSpace;
+    }*/
+    
+    if(node->func.paramStackSpace != 0)
+    {
+        reqSizeParam = 16 - (node->func.paramStackSpace % 16);
+        reqSizeParam += node->func.paramStackSpace;
+        node->func.paramStackSpace = reqSizeParam;
+    }
+    if (node->func.isExtern)
+    {
+        node->func.paramStackSpace += 40;
+    }
+
 	for (Statement* s : node->statements)
 	{
 		s->accept(this);
 	}
+
+    int reqSize = 0;
+    /*if (node->func.stackSize % 16 == 0)
+    {
+        reqSize = node->func.stackSize;
+    }
+    else
+    {
+        reqSize = 16 - (node->func.stackSize % 16);
+        reqSize += node->func.stackSize;
+    }*/
+    reqSize = 16 - (node->func.stackSize % 16);
+    reqSize += node->func.stackSize;
+    node->func.stackSize = reqSize;
+
+    if (node->func.params.size() > 4)
+    {
+        //scopeOffset = node->func.paramStackSpace + 8;
+        int prevStackSize = curFunc->stackSize;
+        curFunc->stackSize += curFunc->paramStackSpace + 8;
+        reverseStackUsage = true;
+        for (int i = 4; i < node->func.params.size(); i++)
+        {
+            VarDef vd = { node->func.params[i], {} };
+            vd.accept(this);
+            node->func.params[i].numID = vd.var.numID;
+        }
+        curFunc->stackSize = prevStackSize;
+        reverseStackUsage = false;
+    }
+
+    funcTable->insert({ node->t.value, node->func });
     spaceFor8ALign = 8;
 }
