@@ -61,7 +61,6 @@ void Resolver::visit(Expression* node, std::string des)
                     int fBegin = i;
                     FuncCall temp = { {Identifier, node->tokens[i].value, node->tokens[i].loc} };
                     i+=2;
-
                     while(node->tokens[i].type != RParen)
                     {
                         Expression e = { node->tokens[i] };
@@ -289,12 +288,12 @@ void Resolver::visit(VarDef* node)
         if(reverseStackUsage)
         {
             int align = 8;
-            if (align - node->var.type.size >= 0)
+            if (align - node->var.type.getSize() >= 0)
             {
-                curFunc->stackSize -= node->var.type.size;
+                curFunc->stackSize -= node->var.type.getSize();
                 node->var.numID = curFunc->stackSize + scopeOffset;
                 curFunc->varCount++;
-                align -= node->var.type.size;
+                align -= node->var.type.getSize();
             }
             else
             {
@@ -302,33 +301,34 @@ void Resolver::visit(VarDef* node)
                 align = 8;
                 node->var.numID = curFunc->stackSize + scopeOffset;
                 curFunc->varCount++;
-                align -= node->var.type.size;
+                align -= node->var.type.getSize();
             }
             st->insert({ node->t.value, node->var });
             node->expr.accept(this);
             return;
         }
 
-        if(spaceFor8ALign - node->var.type.size >= 0)
+        if(spaceFor8ALign - node->var.type.getSize() >= 0)
         {
             node->var.numID = curFunc->stackSize + scopeOffset;
-            curFunc->stackSize += node->var.type.size;
+            curFunc->stackSize += node->var.type.getSize();
             curFunc->varCount++;
-            spaceFor8ALign -= node->var.type.size;
+            spaceFor8ALign -= node->var.type.getSize();
         }
         else
         {
             curFunc->stackSize += spaceFor8ALign;
             spaceFor8ALign = 8;
             node->var.numID = curFunc->stackSize + scopeOffset;
+            curFunc->stackSize += node->var.type.getSize();
             curFunc->varCount++;
-            spaceFor8ALign -= node->var.type.size;
+            spaceFor8ALign -= node->var.type.getSize();
         }
 	}
 	else
 	{
         node->var.numID = curClass->stackSize + scopeOffset;
-		curClass->stackSize += node->var.type.size;
+		curClass->stackSize += node->var.type.getSize();
 		curClass->varCount++;
 	}
     if(spaceFor8ALign == 0)
@@ -376,7 +376,7 @@ void Resolver::visit(FuncDef* node)
         if(i < 4)
         {
             Expression e;
-            param[i].reqSize = node->func.params[i].type.size;
+            param[i].reqSize = node->func.params[i].type.getSize();
             e.tokens.push_back({ EXPR_TMP, param[i].getVal(), {} });
             VarDef vd = { node->func.params[i], {e}};
             vd.accept(this);
@@ -385,16 +385,17 @@ void Resolver::visit(FuncDef* node)
         else
         {
             int align = 8;
-            if (align - node->func.params[i].type.size >= 0)
+            if (align - node->func.params[i].type.getSize() >= 0)
             {
-                node->func.paramStackSpace += node->func.params[i].type.size;
-                align -= node->func.params[i].type.size;
+                node->func.paramStackSpace += node->func.params[i].type.getSize();
+                align -= node->func.params[i].type.getSize();
             }
             else
             {
                 node->func.paramStackSpace += align;
+                node->func.paramStackSpace += node->func.params[i].type.getSize();
                 align = 8;
-                align -= node->func.params[i].type.size;
+                align -= node->func.params[i].type.getSize();
             }
         }
     }

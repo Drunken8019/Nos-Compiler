@@ -16,11 +16,11 @@ enum TokenType
 	COMPILER_EOF, COMPILER_EMPTY, COMPILER_ERROR,
 	EXPR_DEST, EXPR_TMP, EXPR_FN,
 	/*Symbols*/
-	LCBrace, RCBrace, LParen, RParen, Equals, Semicolon, Comma,
+	LCBrace, RCBrace, LParen, RParen, LSqParen, RSqParen, Equals, Semicolon, Comma,
 	Plus, Minus, Asteriks, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
-	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus,
+	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus, BoolNeg,
 	/*Keywords*/
-	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long,
+	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long, Void,
 };
 
 enum AST
@@ -101,6 +101,18 @@ public:
 	int nonPointerSize;
 	std::string name;
 	bool isPtr = false;
+	int ptrDepth = 0;
+	bool isArray = false;
+	int arraySize = 0;
+
+	int getSize()
+	{
+		if(arraySize == 0)
+		{
+			return size;
+		}
+		return size * arraySize;
+	}
 
 	Type() : size(4), name("int"), nonPointerSize(4)
 	{
@@ -238,6 +250,7 @@ public:
 	std::vector<Token> tokens;
 	std::string des = "";
 	bool desIsPtrDref = false;
+	int ptrDesDepth = 0;
 	std::queue<Token> rpn;
 	std::unordered_map<std::string, FuncCall> exprFnTable;
 	Token resOperator = { Equals, "=", {} };
@@ -278,6 +291,8 @@ class VarAssign: public Statement
 public:
 	Expression expr;
 	bool isPtrAccess = false;
+	int ptrAccessDepth = 0;
+	int ptrAccessOffset = 0;
 
 	VarAssign()
 	{}

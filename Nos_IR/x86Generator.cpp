@@ -79,6 +79,10 @@ std::string x86Generator::keyWord(Token t)
         return "sub";
     case Asteriks:
         return "imul";
+    case Ampersand:
+        return "and";
+    case Pipe:
+        return "or";
     case DEquals:
         return "sete";
     case LDBracket:
@@ -133,6 +137,10 @@ bool x86Generator::isBinary(Token t)
     case Plus:
         return true;
     case Minus:
+        return true;
+    case Ampersand:
+        return true;
+    case Pipe:
         return true;
     case Asteriks:
         return true;
@@ -194,7 +202,7 @@ std::string x86Generator::resName(Token t)
             return blib::asmVar(s->second);
         }
     }
-    return "Undefined Identifier";
+    return "Undefined Identifier " + t.value;
 }
 
 void x86Generator::visit(Root* node)
@@ -213,7 +221,20 @@ void x86Generator::visit(Expression* node, std::string des)
     Token tr12 = { EXPR_DEST, "ptrR12", {} };
     if (node->rpn.size() == 1)
     {
-        mov(r10, node->rpn.front());
+        if(node->desIsPtrDref)
+        {
+            mov(r10, node->rpn.front());
+            *out << "mov r12, " << des << "\n";
+            des = chooseReg(ptrR12);
+            for (int i = 1; i < node->ptrDesDepth; i++)
+            {
+                *out << "mov r12, [r12]\n";
+            }
+        }
+        else
+        {
+            mov(r10, node->rpn.front());
+        }
         *out << keyWord(node->resOperator) + " " + des + ", " + chooseReg(r10) + "\n";
         return;
     }
@@ -276,7 +297,7 @@ void x86Generator::visit(Expression* node, std::string des)
         }
         if(!reduced)
         {
-            std::cout << "Invalid or unsopported expression";
+            std::cout << "Invalid or unsopported expression at line " << tokens.front().loc.line << "\n";
             return;
         }
     }
@@ -289,11 +310,16 @@ void x86Generator::visit(Expression* node, std::string des)
         {
             *out << "mov r10, [r12]\n";
             *out << "mov r12, " << des << "\n";
+            for (int i = 1; i < node->ptrDesDepth; i++)
+            {
+                *out << "mov r12, [r12]\n";
+            }
             *out << keyWord(node->resOperator) << " " << chooseReg(ptrR12) << ", " << chooseReg(r10) << "\n";
         }
         else
         {
-            *out << (keyWord(node->resOperator) + " " + des + ", " + chooseReg(ptrR12) + "\n");
+            *out << "mov r10, [r12]\n";
+            *out << (keyWord(node->resOperator) + " " + des + ", " + chooseReg(r10) + "\n");
         }
     }
     else if (!des.empty())
@@ -302,6 +328,10 @@ void x86Generator::visit(Expression* node, std::string des)
         {
             *out << "mov r12, " << des << "\n";
             des = chooseReg(ptrR12);
+            for (int i = 1; i < node->ptrDesDepth; i++)
+            {
+                *out << "mov r12, [r12]\n";
+            }
         }
         *out << (keyWord(node->resOperator) + " " + des + ", " + chooseReg(r10) + "\n");
     }
@@ -315,6 +345,7 @@ void x86Generator::visit(VarAssign* node)
     if(node->isPtrAccess)
     {
         node->expr.desIsPtrDref = true;
+        node->expr.ptrDesDepth = node->ptrAccessDepth;
         node->expr.des = blib::asmVar(var);
         curExprSize = var.type.nonPointerSize;
         node->expr.accept(this);
@@ -405,11 +436,14 @@ void x86Generator::visit(ReturnCall* node)
 {
     curExprSize = curFunc.retType.size;
 
-	if (node->expr.tokens.empty() && curFunc.stackSize != 0) { *out << "add rsp, " + std::to_string(curFunc.stackSize) + "\nret\n";  return; }
+	if (node->expr.tokens.empty() && curFunc.stackSize == 0) { *out << "ret\n";  return; }
 	std::string res = "";
     //*out << "mov qword [rsp], 0\n";
-	node->expr.des = chooseReg(rax);
-	node->expr.accept(this);
+    if(curFunc.retType.name != "void" || curFunc.retType.isPtr)
+    {
+        node->expr.des = chooseReg(rax);
+        node->expr.accept(this);
+    }
 
 	if (curFunc.t.value == "main")
 	{
@@ -522,6 +556,10 @@ void x86Generator::visit(ClassDefin* node)
 }
 void x86Generator::visit(VarDef* node)
 {
+    if(node->var.type.name == "void" && node->var.type.isPtr == false)
+    {
+        std::cout << "Cannot define variable of type void\n";
+    }
 	std::string res = "";
 	node->expr.des = blib::asmVar(node->var);
     curExprSize = node->var.type.size;

@@ -122,40 +122,50 @@ Definition* Parser::parseDefinition(std::vector<Token> stmnt)
 FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 {
 	Type t;
+	int i = 0;
 	//-------------------- Syntax-Error handling --------------------
 	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"def\"", stmnt[1]); return { errTok }; }
 	else
 	{
 		t = getType(stmnt[2]);
+		i = 3;
+		while (stmnt[i].type == Asteriks)
+		{
+			t.isPtr = true;
+			t.size = 8;
+			t.ptrDepth++;
+			i++;
+		}
 	}
-	if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
-	else if (stmnt[4].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
+	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
+	else if (stmnt[i+1].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
 	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
 	if(stmnt.back().type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt.back()); return { errTok }; }
 	//---------------------------- END ------------------------------
 	Variable v = { emptyTok, {} };
-	FuncDef fd = { stmnt[3] };
+	FuncDef fd = { stmnt[i] };
 	fd.func.retType = t;
-	for (int i = 5; i < stmnt.size()-1; i++)
+	i += 2;
+	for (; i < stmnt.size()-1; i++)
 	{
 		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
 		{
 			v.type = getType(stmnt[i]);
-			if(stmnt[i + 1].type == Asteriks)
+			i++;
+			while(stmnt[i].type == Asteriks)
 			{
 				v.type.isPtr = true;
 				v.type.size = 8;
-				stmnt.erase(stmnt.begin() + i + 1);
+				v.type.ptrDepth++;
+				i++;
 			}
-			v.t = stmnt[i + 1];
+			v.t = stmnt[i];
 			i++;
 		}
-		else
+
+		if(v.t.type != COMPILER_EMPTY)
 		{
-			if(v.t.type != COMPILER_EMPTY)
-			{
-				fd.func.params.push_back(v);
-			}
+			fd.func.params.push_back(v);
 		}
 	}
 
@@ -176,40 +186,49 @@ FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
 FuncDef Parser::parseExternDef(std::vector<Token> stmnt)
 {
 	Type t;
+	int i = 0;
 	//-------------------- Syntax-Error handling --------------------
 	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"extern\"", stmnt[1]); return { errTok }; }
 	else
 	{
 		t = getType(stmnt[2]);
+		i = 3;
+		while (stmnt[i].type == Asteriks)
+		{
+			t.isPtr = true;
+			t.size = 8;
+			t.ptrDepth++;
+			i++;
+		}
 	}
-	if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
-	else if (stmnt[4].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
+	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
+	else if (stmnt[i+1].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
 	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
 	if (stmnt.back().type != TokenType::Semicolon) { printErrorMsg("Expected \";\"", stmnt.back()); return { errTok }; }
 	//---------------------------- END ------------------------------
 	Variable v = { emptyTok, {} };
-	FuncDef fd = { stmnt[3] };
+	FuncDef fd = { stmnt[i] };
 	fd.func.retType = t;
-	for (int i = 5; i < stmnt.size() - 1; i++)
+	i += 2;
+	for (; i < stmnt.size() - 1; i++)
 	{
 		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
 		{
 			v.type = getType(stmnt[i]);
-			if (stmnt[i + 1].type == Asteriks)
+			i++;
+			while (stmnt[i].type == Asteriks)
 			{
 				v.type.isPtr = true;
 				v.type.size = 8;
-				stmnt.erase(stmnt.begin() + i + 1);
+				v.type.ptrDepth++;
+				i++;
 			}
-			v.t = stmnt[i + 1];
+			v.t = stmnt[i];
 			i++;
 		}
-		else
+		if (v.t.type != COMPILER_EMPTY)
 		{
-			if (v.t.type != COMPILER_EMPTY)
-			{
-				fd.func.params.push_back(v);
-			}
+			fd.func.params.push_back(v);
 		}
 	}
 	fd.func.isExtern = true;
@@ -264,43 +283,34 @@ VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"let\"", stmnt[1]); return { {stmnt[3], {}}, {{errTok}} }; }
 	else	
 	{
-		switch(stmnt[2].type)
-		{
-		case TokenType::Character:
-			t.size = 1;
-			t.name = "char";
-			break;
-		case TokenType::Short:
-			t.size = 2;
-			t.name = "short";
-			break;
-		case TokenType::Integer:
-			t.size = 4;
-			t.name = "int";
-			break;
-		case TokenType::Long:
-			t.size = 8;
-			t.name = "long";
-			break;
-		}
+		t = getType(stmnt[2]);
 	}
 	Variable v = { stmnt[3], {t} };
-	Expression e;
-	int i = 4;
-	if (stmnt[3].type == TokenType::Asteriks) 
+	
+	int i = 3;
+	while(stmnt[i].type == TokenType::Asteriks) 
 	{ 
 		v.type.isPtr = true;
 		v.type.size = 8;
+		v.type.ptrDepth++;
 		i++;
-		v.t = stmnt[4];
-		if (stmnt[4].type != TokenType::Identifier)
+	}
+	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { {stmnt[3], {}}, {{errTok}} }; }
+	v.t = stmnt[i];
+	i++;
+
+	if(stmnt[i].type == TokenType::LSqParen)
+	{
+		i++;
+		v.type.isArray = true;
+		v.type.arraySize = std::stoi(stmnt[i].value);
+		i++;
+		if(stmnt[i].type != TokenType::RSqParen)
 		{
-			printErrorMsg("Expected identifier", stmnt[3]); 
-			return { {stmnt[3], {}}, {{errTok}} };
+			printErrorMsg("Expected \"]\"", stmnt[i]); 
+			return { {stmnt[i], {}}, {{errTok}} };
 		}
 	}
-	else if (stmnt[3].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { {stmnt[3], {}}, {{errTok}} }; }
-
 	else if (stmnt[i].type == TokenType::Semicolon) 
 	{ 
 		return { {stmnt[i-1], {}}, {{emptyTok}}};
@@ -308,6 +318,7 @@ VarDef Parser::parseVarDef(std::vector<Token> stmnt)
 	else if (stmnt[i].type != TokenType::Equals) { printErrorMsg("Expected \"=\" or \";\"", stmnt[i]); return { {stmnt[i-1], {}}, {{errTok}} }; }
 	//---------------------------- END ------------------------------
 	
+	Expression e;
 	i++;
 	for(; i<stmnt.size(); i++)
 	{
@@ -349,15 +360,19 @@ VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
 {
 	Expression e;
 	VarAssign va = { stmnt[0], {} };
-	if (stmnt[0].type == TokenType::Asteriks)
+	int i = 0;
+	while (stmnt[i].type == TokenType::Asteriks)
 	{
-		va.t = stmnt[1];
+		va.ptrAccessDepth++;
 		va.isPtrAccess = true;
-		stmnt.erase(stmnt.begin());
+		i++;
 	}
-	if (stmnt[1].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
+	va.t = stmnt[i];
+	i++;
+
+	if (stmnt[i].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
 	//else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
-	switch(stmnt[1].type)
+	switch(stmnt[i].type)
 	{
 	case Equals:
 		e.resOperator = { Equals, "=", {} };
@@ -379,13 +394,13 @@ VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
 		return { errTok, {} };
 	}
 	
-	int i = 2;
+	i++;
+
 	for(; i<stmnt.size(); i++)
 	{
 		if (stmnt[i].type == TokenType::Semicolon) break;
 		e.tokens.push_back(stmnt[i]);
 	}
-	va.t = stmnt[0];
 	va.expr = e;
 	return va;
 }
@@ -561,6 +576,19 @@ Type Parser::getType(Token tok)
 		t.nonPointerSize = 8;
 		t.name = "long";
 		break;
+	case TokenType::Void:
+		t.size = 8;
+		t.nonPointerSize = -1;
+		t.name = "void";
+		break;
+	case TokenType::Identifier:
+		t.size = 0;
+		t.nonPointerSize = 0;
+		t.name = tok.value;
+		break;
+	default:
+		printErrorMsg("\"" + tok.value + "\" is not a valid type identifier", tok);
+		return t;
 	}
 	return t;
 }

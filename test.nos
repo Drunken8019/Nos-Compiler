@@ -1,34 +1,44 @@
 extern:long GetStdHandle(int handle);
 extern:char WriteConsoleA(long handle, char* msg, int msgSize, int reserved);
+extern:long GetProcessHeap();
+extern:void* HeapAlloc(long hHeap, int dwFlags, long dwBytes);
+extern:char HeapFree(long hHeap, int dwFlags, void* dwBytes);
+extern:char ReadConsoleA(long hConsoleInput, char* lpBuffer, int nNumberOfCharsToRead, int* lpNumberOfCharsRead, void* pInputControl);
 
 def:int main()
 {
-	let:char h = 104;
-	let:char e = 101;
-	let:char l = 108;
-	let:char l1 = 108;
-	let:char o = 111;
+	let:char* string = alloc(100);
+	let:int res = scan(string, 100);
 	
-	let:char space = 32;
-	
-	let:char w = 119;
-	let:char o1 = 111;
-	let:char r = 114;
-	let:char l2 = 108;
-	let:char d = 100;
-
-	let:int counter = 0;
-	while(counter < 100)
-	{
-		print(&h, 11);
-		counter += 1;
-	}
-	return 0;
+	print(string, 100);
+	return res;
 }
 
-def:char print(char* msg, int msgSize)
+def:void* alloc(long bytes)
 {
-	let:long std_out = GetStdHandle(-11);
-	WriteConsoleA(std_out, msg, msgSize, 0);
-	return 0;
+	let:long heap = GetProcessHeap();
+	let:void* xy = HeapAlloc(heap, 8, bytes);
+	return xy;
+}
+
+def:void print(char* msg, int len)
+{
+	let:long handle = GetStdHandle(-11);
+	WriteConsoleA(handle, msg, len, 0);
+	return; 
+}
+
+def:int scan(char* msgBuffer, int size)
+{
+	let:long handle = GetStdHandle(-10);
+	let:int charsRead = 0;
+	ReadConsoleA(handle, msgBuffer, size, &charsRead, 0);
+	return charsRead;
+}
+
+def:void append(char** cur, char c)
+{
+	**cur = c;
+	*cur += 1;
+	return;
 }

@@ -33,6 +33,7 @@ private:
 		{"short", TokenType::Short},
 		{"int", TokenType::Integer},
 		{"long", TokenType::Long},
+		{"void", TokenType::Void},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
@@ -40,6 +41,8 @@ private:
 		{'}', TokenType::RCBrace},
 		{'(', TokenType::LParen},
 		{')', TokenType::RParen},
+		{'[', TokenType::LSqParen},
+		{']', TokenType::RSqParen},
 		{'=', TokenType::Equals},
 		{';', TokenType::Semicolon},
 		{',', TokenType::Comma},
@@ -52,12 +55,14 @@ private:
 		{':', TokenType::Colon},
 		{'&', TokenType::Ampersand},
 		{'|', TokenType::Pipe},
+		{'!', TokenType::BoolNeg},
 	};
 
 	std::unordered_map<std::string, TokenType> compoundSymbols = {
 		{"==", TokenType::DEquals},
 		{"<=", TokenType::LDBEq},
 		{">=", TokenType::RDBEq},
+		{"!=", TokenType::NotEq},
 		{"+=", TokenType::PlusEq},
 		{"-=", TokenType::MinusEq},
 		{"/=", TokenType::DivEq},
