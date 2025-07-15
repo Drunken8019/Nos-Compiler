@@ -40,9 +40,19 @@ p {
   margin-left: 5%;
 }
 
-.menu li, .menu a{
-  font-size: x-large;
+.menu li, .menu button{
+  font-size: large;
   color: black;
+}
+
+.menu button {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu button:hover {
+  color: rgb(90, 90, 90);
 }
 
 ol > li::marker { 

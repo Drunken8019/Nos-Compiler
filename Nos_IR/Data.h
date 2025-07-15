@@ -6,10 +6,32 @@
 #include <fstream>
 #include <vector>
 #include <unordered_map>
+#include <variant>
 
 class Visitor;
 class FuncCall;
 class Expression;
+class ExprNode;
+class Body;
+class DefinBody;
+class VarDef;
+class VariableUse;
+class Literal;
+class Operator;
+class Register;
+class Class;
+class Statement;
+class Definition;
+class FuncDef;
+class Variable;
+class Function;
+class ASTNode;
+class VarAsign;
+class IfStatement;
+class ElIfStmnt;
+class ElseStmnt;
+class WhileStmnt;
+class Root;
 
 enum TokenType
 {
@@ -40,59 +62,159 @@ struct Token
 	Location loc;
 };
 
-//--------------------------- Types -----------------------------
-
-//Mby ExprNode will see some use... else expr will just be kept using tokens
-class ExprNode
+class ASTNode
 {
 public:
-	virtual std::string getVal() = 0;
+	Token t;
+	ASTNode() : t()
+	{
+	}
 
-	ExprNode()
+	ASTNode(Token tok) : t(tok)
+	{
+	}
+
+	virtual void accept(Visitor* v) = 0;
+};
+
+class Statement : public ASTNode
+{
+public:
+	Statement()
+	{
+	}
+	//std::vector<Token> value;
+	Statement(Token t) : ASTNode(t)
+	{
+	}
+
+	virtual AST type()
+	{
+		return AST::ASTStatement;
+	}
+
+	void accept(Visitor* v);
+};
+
+//--------------------------- Types -----------------------------
+
+
+class Operator
+{
+public:
+	std::string keyWord = "";
+	Token tok;
+	bool isUnary = false;
+	bool isBinary = true;
+	bool isMemOp = false;
+
+	std::unordered_map<TokenType, std::string> operatorKeyword = {
+	{TokenType::Equals, "mov"},
+	{TokenType::Plus, "add"},
+	{TokenType::Minus, "sub"},
+	{TokenType::Asteriks, "imul"},
+	{TokenType::Div, "div"},
+	{TokenType::Ampersand, "and"},
+	{TokenType::Pipe, "or"},
+	{TokenType::DEquals, "sete"},
+	{TokenType::LDBracket, "setl"},
+	{TokenType::RDBracket, "setg"},
+	{TokenType::LDBEq, "setle"},
+	{TokenType::RDBEq, "setge"},
+	{TokenType::NotEq, "setne"},
+	{TokenType::UMinus, "neg"},
+	{TokenType::UAmpersand, "lea"},
+	{TokenType::UAsteriks, "mov"}, //Hopefully this doesnt lead to problems
+	};
+
+	std::unordered_map<TokenType, TokenType> binToUnary = {
+		{TokenType::Asteriks, TokenType::UAsteriks},
+		{TokenType::Ampersand, TokenType::UAmpersand},
+		{TokenType::Minus, TokenType::UMinus},
+	};
+
+	Operator(Token t) : tok(t)
+	{
+		auto opKey = operatorKeyword.find(t.type);
+		if(opKey != operatorKeyword.end())
+		{
+			keyWord = opKey->second;
+		}
+		else
+		{
+			keyWord = "Unrecognized Operator";
+		}
+	}
+
+	void setUnary(bool state)
+	{
+		isUnary = state;
+		isBinary = !state;
+		isMemOp = !state;
+		tok.type = binToUnary[tok.type];
+		auto opKey = operatorKeyword.find(tok.type);
+		if (opKey != operatorKeyword.end())
+		{
+			keyWord = opKey->second;
+		}
+		else
+		{
+			keyWord = "Unrecognized unary Operator";
+		}
+	}
+
+	void setMemOp(bool state)
+	{
+		isUnary = !state;
+		isBinary = !state;
+		isMemOp = state;
+	}
+
+	Operator()
 	{}
 };
 
-class Literal : public ExprNode //Operators will be saved as literals
+class LeftParen
+{
+public:
+	Token tok;
+	LeftParen(Token t) : tok(t)
+	{}
+};
+
+class RightParen
+{
+public:
+	Token tok;
+	RightParen(Token t) : tok(t)
+	{
+	}
+};
+
+class Literal
 {
 public:
 	std::string val = "";
 
+	Literal(Token t) : val(t.value){}
 	Literal(std::string s) : val(s){}
 	Literal(){}
-
-	std::string getVal() override
-	{
-		return val;
-	}
 };
 
-class Register : public ExprNode
+class Register
 {
 public:
-	int reqSize = 4;
-	std::string qReg;
-	std::string dReg;
-	std::string wReg;
-	std::string bReg;
+	std::string qReg = "";
+	std::string dReg = "";
+	std::string wReg = "";
+	std::string bReg = "";
 
 	Register(std::string q, std::string d, std::string w, std::string b) :
 		qReg(q), dReg(d), wReg(w), bReg(b)
 	{}
 
-	std::string getVal() override
-	{
-		switch(reqSize)
-		{
-		case 1:
-			return bReg;
-		case 2:
-			return wReg;
-		case 4:
-			return dReg;
-		case 8:
-			return qReg;
-		}
-	}
+	Register()
+	{}
 };
 
 class Type {
@@ -123,7 +245,7 @@ public:
 	}
 };
 
-class Variable : public ExprNode
+class Variable
 {
 public:
 	Type type;
@@ -136,20 +258,30 @@ public:
 	Variable(Token tok, Type t) : type(t), t(tok)
 	{
 	}
+};
 
-	std::string getVal() override
-	{
-		return t.value;
-	}
+class VariableUse
+{
+public:
+	Variable v;
+	std::string identifier = "";
+
+	VariableUse()
+	{}
+
+	VariableUse(Token t) : identifier(t.value)
+	{}
+
+	VariableUse(Variable var) : v(var)
+	{}
 };
 
 class Function
 {
 public:
+	Body* body = nullptr;
 	Token t;
 	Type retType;
-	std::unordered_map<std::string, Variable> symbolTable;
-	std::unordered_map<std::string, Function>* functionTable;
 	std::vector<Variable> params;
 	int paramStackSpace = 0;
 	int stackSize = 0;
@@ -169,9 +301,8 @@ public:
 class Class
 {
 public:
+	DefinBody* body;
 	Token t;
-	std::unordered_map<std::string, Variable> classSymbolTable;
-	std::unordered_map<std::string, Function> functionTable;
 	int stackSize = 8;
 	int varCount = 1;
 
@@ -183,133 +314,49 @@ public:
 	}
 };
 
-//------------------------ Basic Library ------------------------
-class blib
-{
-public:
-	static int offset;
-
-	static std::string varOffsetStr(Variable v)
-	{
-		return std::to_string(v.numID + offset);
-	}
-
-	static std::string asmVar(Variable v)
-	{
-		return "[rsp+" + varOffsetStr(v) + "]";
-	}
-
-	static bool canBeUnary(TokenType t)
-	{
-		switch(t)
-		{
-		case Ampersand:
-			return true;
-		case Asteriks:
-			return true;
-		case Minus:
-			return true;
-		default:
-			return false;
-		}
-	}
-
-	static TokenType getUnary(TokenType t)
-	{
-		switch (t)
-		{
-		case Ampersand:
-			return UAmpersand;
-		case Asteriks:
-			return UAsteriks;
-		case Minus:
-			return UMinus;
-		default:
-			return COMPILER_ERROR;
-		}
-	}
-};
-
 //------------------------- AST-Nodes ---------------------------
-class ASTNode
+
+class Body : ASTNode
 {
 public:
-	Token t;
-	ASTNode() : t()
-	{}
+	std::vector<Statement*> statements;
+	std::unordered_map<std::string, Variable> symbolTable;
+	std::unordered_map<std::string, Function> functionTable;
 
-	ASTNode(Token tok) : t(tok)
-	{}
+	Body(){}
 
-	virtual void accept(Visitor* v) = 0;
-};
-
-class Expression : public ASTNode
-{
-public:
-	std::vector<Token> tokens;
-	std::string des = "";
-	bool desIsPtrDref = false;
-	int ptrDesDepth = 0;
-	std::queue<Token> rpn;
-	std::unordered_map<std::string, FuncCall> exprFnTable;
-	Token resOperator = { Equals, "=", {} };
-
-	Expression()
-	{}
-
-	Expression(Token t) : ASTNode(t)
+	Body(Token t) : ASTNode(t)
 	{
 	}
 
-	Expression(std::vector<Token> t) : ASTNode(t.front()), tokens(t)
-	{}
+	void accept(Visitor* v) override;
+};
 
-	void accept(Visitor* v);
+class DefinBody : ASTNode
+{
+public:
+	std::vector<Definition*> definitions;
+	std::unordered_map<std::string, Variable> symbolTable;
+	std::unordered_map<std::string, Function> functionTable;
+
+	DefinBody() {}
+
+	DefinBody(Token t) : ASTNode(t)
+	{
+	}
+
+	void accept(Visitor* v) override;
 };
 
 //------------------------- Statements --------------------------
-class Statement : public ASTNode
-{
-public:
-	Statement()
-	{}
-	//std::vector<Token> value;
-	Statement(Token t) : ASTNode(t)
-	{}
 
-	virtual AST type()
-	{
-		return AST::ASTStatement;
-	}
-
-	void accept(Visitor* v);
-};
-
-class VarAssign: public Statement
-{
-public:
-	Expression expr;
-	bool isPtrAccess = false;
-	int ptrAccessDepth = 0;
-	int ptrAccessOffset = 0;
-
-	VarAssign()
-	{}
-
-	VarAssign(Token t, Expression e) : expr(e), Statement(t)
-	{}
-
-	void accept(Visitor* v);
-};
-
-class FuncCall : public Statement, ExprNode
+class FuncCall : public Statement
 {
 private:
 	Register rax = { "rax", "eax", "ax", "al" };
 public:
 	Function f;
-	std::vector<Expression> params;
+	std::vector<Expression*> params;
 
 
 	FuncCall()
@@ -319,34 +366,17 @@ public:
 	{}
 
 	void accept(Visitor* v);
-
-	std::string getVal() override
-	{
-		switch(f.retType.size)
-		{
-		case 1:
-			return rax.bReg;
-		case 2:
-			return rax.wReg;
-		case 4:
-			return rax.dReg;
-		case 8:
-			return rax.qReg;
-		default:
-			return rax.dReg;
-		}
-	}
 };
 
 class ReturnCall : public Statement
 {
 public:
-	Expression expr;
+	Expression* expr;
 
 	ReturnCall()
 	{}
 
-	ReturnCall(Token ret, Expression v): expr(v), Statement(ret)
+	ReturnCall(Token ret, Expression* v): expr(v), Statement(ret)
 	{}
 
 	void accept(Visitor* v);
@@ -370,13 +400,13 @@ public:
 class IfStmnt : public Statement
 {
 public:
-	Expression cond;
-	std::vector<Statement*> body;
+	Expression* cond;
+	Body body;
 	std::unordered_map<std::string, Variable> symbolTable;
 	IfFollower *next = nullptr;
 	int followerCount = 0;
 
-	IfStmnt(Token t) : Statement(t) {}
+	IfStmnt(Token t) : Statement(t), body(t) {}
 
 	void accept(Visitor* v);
 };
@@ -384,9 +414,8 @@ public:
 class ElIfStmnt : public IfFollower
 {
 public:
-	Expression cond;
-	std::vector<Statement*> body;
-	std::unordered_map<std::string, Variable> symbolTable;
+	Expression* cond;
+	Body body;
 	IfFollower* next = nullptr;
 
 
@@ -399,10 +428,10 @@ public:
 class ElseStmnt : public IfFollower
 {
 public:
-	std::vector<Statement*> body;
-	std::unordered_map<std::string, Variable> symbolTable;
+	Body body;
 
-	ElseStmnt(Token t) : IfFollower(t){}
+	ElseStmnt(Token t) : IfFollower(t), body(t)
+	{}
 
 	void accept(Visitor* v);
 };
@@ -412,11 +441,10 @@ public:
 class WhileStmnt : public Statement
 {
 public:
-	Expression cond;
-	std::vector<Statement*> body;
-	std::unordered_map<std::string, Variable> symbolTable;
+	Expression* cond;
+	Body body;
 
-	WhileStmnt(Token t) : Statement(t){}
+	WhileStmnt(Token t) : Statement(t), body(t){}
 
 	void accept(Visitor* v);
 };
@@ -437,16 +465,13 @@ public:
 	}
 
 	void accept(Visitor* v);
+	virtual void acceptSig(Visitor* v);
 };
 
 class ClassDefin : public Definition
 {
 public:
 	Class c;
-	std::vector<Definition*> defs;
-
-	ClassDefin()
-	{}
 
 	ClassDefin(Token t) : c(t), Definition(t)
 	{}
@@ -457,31 +482,32 @@ public:
 	}
 
 	void accept(Visitor* v);
+	void acceptSig(Visitor* v);
 };
 
 class VarDef : public Definition
 {
 public:
 	Variable var;
-	Expression expr;
+	Expression* expr;
+	Operator eq = Operator(Token(Equals, "=", Location(0, 0)));
 
-	VarDef(Variable v, Expression e) : Definition(v.t), var(v), expr(e)
+	VarDef(Variable v, Expression* e) : Definition(v.t), var(v), expr(e)
 	{
 	}
 
-	AST type()
+	AST type() //TODO: remove ast type(), not needed
 	{
 		return AST::ASTVarDef;
 	}
-
 	void accept(Visitor* v);
+	void acceptSig(Visitor* v);
 };
 
 class FuncDef : public Definition
 {
 public:
 	Function func;
-	std::vector<Statement*> statements;
 
 	int stackSpace = 0;
 
@@ -492,6 +518,7 @@ public:
 	{}
 
 	void accept(Visitor* v);
+	void acceptSig(Visitor* v);
 
 	AST type()
 	{
@@ -503,14 +530,112 @@ public:
 class Root : public ASTNode
 {
 public:
-	std::vector<Definition*> defs;
-	Root()
-	{
-	}
+	DefinBody body;
 
-	Root(Token t) : ASTNode(t)
+	Root(Token t) : ASTNode(t), body(t)
 	{
 	}
 
 	void accept(Visitor* v);
+};
+
+class ExprNode
+{
+public:
+	using ExprVariant = std::variant<Literal, VariableUse, FuncCall, Operator, Register, LeftParen, RightParen>;
+	ExprVariant value;
+	bool isEmpty = false;
+
+	ExprNode() : isEmpty(true)
+	{
+	}
+
+	ExprNode(Literal l) : value(l) {}
+	ExprNode(VariableUse v) : value(v) {}
+	ExprNode(FuncCall f) : value(f) {}
+	ExprNode(Operator o) : value(o) {}
+	ExprNode(Register r) : value(r) {}
+	ExprNode(LeftParen lp) : value(lp) {}
+	ExprNode(RightParen rp) : value(rp) {}
+
+	bool isLiteral() const { return std::holds_alternative<Literal>(value); }
+	bool isVariableUse() const { return std::holds_alternative<VariableUse>(value); }
+	bool isFuncCall() const { return std::holds_alternative<FuncCall>(value); }
+	bool isOperator() const { return std::holds_alternative<Operator>(value); }
+	bool isRegister() const { return std::holds_alternative<Register>(value); }
+	bool isLeftParen() const { return std::holds_alternative<LeftParen>(value); }
+	bool isRightParen() const { return std::holds_alternative<RightParen>(value); }
+};
+
+class Expression : public Statement
+{
+public:
+	std::vector<ExprNode> nodes;
+	std::vector<ExprNode> rpn;
+	std::unordered_map<std::string, FuncCall*> exprFnTable;
+
+	Expression()
+	{
+	}
+
+	Expression(Token t) : Statement(t)
+	{
+	}
+
+	Expression(std::vector<ExprNode> n, Token t) : Statement(t), nodes(n)
+	{
+	}
+
+	void accept(Visitor* v);
+};
+
+//------------------------ Basic Library ------------------------
+class blib
+{
+public:
+	static int offset;
+
+	using ExprVariant = std::variant<Literal, VariableUse, FuncCall, Operator, Register, LeftParen, RightParen>;
+
+	static std::string varOffsetStr(Variable v)
+	{
+		return std::to_string(v.numID + offset);
+	}
+
+	static std::string asmVar(Variable v)
+	{
+		return "[rsp+" + varOffsetStr(v) + "]";
+	}
+
+	static bool canBeUnary(ExprVariant ev)
+	{
+		Operator o = std::get<Operator>(ev);
+		switch (o.tok.type)
+		{
+		case Ampersand:
+			return true;
+		case Asteriks:
+			return true;
+		case Minus:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+
+	static TokenType getUnary(TokenType t)
+	{
+		switch (t)
+		{
+		case Ampersand:
+			return UAmpersand;
+		case Asteriks:
+			return UAsteriks;
+		case Minus:
+			return UMinus;
+		default:
+			return COMPILER_ERROR;
+		}
+	}
 };

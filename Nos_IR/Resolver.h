@@ -15,11 +15,10 @@ public:
 	bool reverseStackUsage = false;
 
 	void resolveAST(Root* root);
-	int getPrec(Token t);
+	int getPrec(ExprNode n);
 
 	void visit(Root* node) override;
-	void visit(Expression* node, std::string des) override;
-	void visit(VarAssign* node) override;
+	void visit(Expression* node) override;
 	void visit(FuncCall* node) override;
 	void visit(ReturnCall* node) override;
 	void visit(IfStmnt* node) override;
@@ -27,7 +26,11 @@ public:
 	void visit(ElseStmnt* node) override;
 	void visit(WhileStmnt* node) override;
 	void visit(ClassDefin* node) override;
+	void visitSignature(ClassDefin* node) override;
 	void visit(VarDef* node) override;
 	void visit(FuncDef* node) override;
+	void visitSignature(FuncDef* node) override;
+	void visit(Body* node) override;
+	void visit(DefinBody* node) override;
 };
 

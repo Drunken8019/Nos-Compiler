@@ -14,26 +14,46 @@ public:
 	Token emptyTok = { TokenType::COMPILER_EMPTY, "", {0, 0} };
 	Token errTok = { TokenType::COMPILER_ERROR, "", {0, 0} };
 	std::vector<std::string> externs;
+	std::stack<TokenType> openGroups;
+	std::unordered_map<std::string, Type> primTypes = { {"char", Type(1, "char")},
+		{"short", Type(2, "short")}, 
+		{"int", Type(4, "int")}, 
+		{"long", Type(8, "long")}, 
+		{"void", Type(-1, "void")}, 
+	};
 
 	std::vector<Token> getStatement();
-	Root parseRoot(std::vector<Token> stmnt);
-	ClassDefin parseClassDef(std::vector<Token> stmnt);
-	Definition* parseDefinition(std::vector<Token> stmnt);
-	Statement* parseStatement(std::vector<Token> stmnt);
-	FuncDef parseFunctionDef(std::vector<Token> stmnt);
-	FuncDef parseExternDef(std::vector<Token> stmnt);
-	VarDef parseVarDef(std::vector<Token> stmnt);
-	FuncCall parseFunctionCall(std::vector<Token> stmnt);
-	ReturnCall parseFuncReturn(std::vector<Token> stmnt);
-	VarAssign parseVarAsign(std::vector<Token> stmnt);
-	IfStmnt parseIfStmnt(std::vector<Token> stmnt);
-	ElIfStmnt parseElIfStmnt(std::vector<Token> stmnt);
-	ElseStmnt parseElseStmnt(std::vector<Token> stmnt);
-	WhileStmnt parseWhileStmnt(std::vector<Token> stmnt);
+	Root parseRoot();
+	Body parseBody();
+	DefinBody parseDefinBody();
+	DefinBody parseDefinBodyHeadless();
+	ClassDefin parseClassDef();
+	Definition* parseDefinition();
+	Statement* parseStatement();
+	FuncDef parseFunctionDef();
+	FuncDef parseExternDef();
+	Variable parseParamDef();
+	VarDef parseVarDef();
+	FuncCall parseFunctionCall();
+	ReturnCall parseFuncReturn();
+	IfStmnt parseIfStmnt();
+	ElIfStmnt parseElIfStmnt();
+	ElseStmnt parseElseStmnt();
+	WhileStmnt parseWhileStmnt();
+	Expression parseExpression();
+	ExprNode parseExprNode();
+
 
 
 	void printErrorMsg(std::string msg, Token t);
 	Type getType(Token t);
+	bool check(TokenType expected);
+	bool match(TokenType expected);
+	Token consume(TokenType t, const std::string& errorMsg);
+	Token open(TokenType t, const std::string& errorMsg);
+	Token close(TokenType t, const std::string& errorMsg);
+	template<typename... TokenTypes>
+	bool matchAny(TokenTypes... types);
 
 	Lexer lex;
 	x86Generator gen;

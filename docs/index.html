@@ -23,42 +23,28 @@
 </head>
 
 <body>
-  <div class="sidebar">
-    <ol class="menu">
-      <li><a href="">NOS Documentation</a></li>
-      <li><a href="">Common Coding Practices</a></li>
-        <ol>
-          <li><a href="">Variable Definitions</a></li>
-          <li><a href="">Function Definitions</a></li>
-          <li><a href="">Control Flow Statements</a></li>
+  <aside>
+    <nav>
+      <div class="sidebar">
+        <ol class="menu">
+          <li><button id="nos_docs" >NOS Documentation</button></li>
+          <li><button id="coding_practices">Common Coding Practices</button></li>
+            <ol>
+              <li><button id="var_def">Variables</button></li>
+              <li><button id="func_def">Functions</button></li>
+              <li><button id="control_flow">Control Flow</button></li>
+            </ol>
+          </li>
         </ol>
-      </li>
-    </ol>
-  </div>
+      </div>
+    </nav>
+  </aside>
   
-  <div class="container top">
-	<div class="row underline">
-		<div class="two columns v-center " >
-			<img class="fimg" src="img/logo_full.png">
-		</div>
-		<div class="ten columns v-center" >
-			<h1>NOS Documentation</h1>
-		</div>
-	</div>
-  <div class="row">
-    <div class="twelve columns v-center" >
-			<p>Welcome to the NOS Documentation. NOS is a low-level, statically typend and ahead-of-time compiled language.
-        The compiler frontend is built from scratch in C++, with the backend being Assembly (<a target="_blank" href="https://www.nasm.us/">NASM</a>) and the 
-        <a target="_blank" href="https://learn.microsoft.com/de-de/cpp/build/reference/linker-options?view=msvc-170">MSVC-Linker</a>. 
-        Here you can find everything related to the language. Important to note is, 
-        the NOS programming language was created purely as hobby-project. If you want to try it out, downloads for the
-        compiler can be found <a href="">here</a>.</p>
-        
-		</div>
-  </div>
+  <div class="container top" id="content">
+
   </div>
   <script src="js/app.js"></script>
 
 </body>
-
+<script src="js/app.js"></script>
 </html>

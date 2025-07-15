@@ -1,16 +1,6 @@
 #include "Lexer.h"
 bool isOnlyWhitespace(const std::string& str);
 
-void Lexer::saveToken(Token t) 
-{
-	readBuffer.push(t);
-}
-
-void Lexer::clearSaveBuffer()
-{
-	readBuffer = std::queue<Token>();
-}
-
 Lexer::Lexer()
 {
 	this->in = NULL;
@@ -21,62 +11,74 @@ Lexer::Lexer(std::ifstream* i)
 	this->in = i;
 }
 
-Token Lexer::nextToken()
+void Lexer::initialize()
 {
 	std::string curLine;
-	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
-	if(useSaveBuffer && !readBuffer.empty())
-	{
-		result = readBuffer.front();
-		readBuffer.pop();
-		return result;
-	}
-
-	if(tokenBuffer.empty())
+	do
 	{
 		do
 		{
-			if (!std::getline(*in, curLine)) 
+			if (!std::getline(*in, curLine))
 			{
-				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+				tokenBuffer.push_back({ TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} });
+				return;
 			}
 			loc.line++;
 		} while (curLine.empty() || isOnlyWhitespace(curLine));
 		loadTokens(curLine);
-	}
+	} while (tokenBuffer.back().type != COMPILER_EOF);
+}
 
-	if(!tokenBuffer.empty())
+bool Lexer::stepBack(unsigned int len)
+{
+	if (index - len < 0) return false;
+	index -= len;
+	return true;
+}
+
+bool Lexer::setTo(unsigned int index)
+{
+	if (index >= tokenBuffer.size()) return false;
+	Lexer::index = index;
+	return true;
+}
+
+unsigned int Lexer::getIndex()
+{
+	return index;
+}
+
+Token Lexer::nextToken()
+{
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+
+	if(index < tokenBuffer.size())
 	{
-		result = tokenBuffer.front();
-		tokenBuffer.pop();
+		result = tokenBuffer[index];
+		index++;
 	}
 	return result;
 }
 
 Token Lexer::peek()
 {
-	std::string curLine;
 	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
-	if (useSaveBuffer && !readBuffer.empty())
-	{
-		result = readBuffer.front();
-		return result;
-	}
 
-	if (tokenBuffer.empty())
+	if (index < tokenBuffer.size())
 	{
-		do
-		{
-			if (!std::getline(*in, curLine)) 
-			{
-				return { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
-			}
-			loc.line++;
-		} while (curLine.empty() || isOnlyWhitespace(curLine));
-		loadTokens(curLine);
+		result = tokenBuffer[index];
 	}
+	return result;
+}
 
-	if (!tokenBuffer.empty()) result = tokenBuffer.front();
+Token Lexer::peek_behind()
+{
+	Token result = { TokenType::COMPILER_EOF, "EOF!", {loc.line, 0} };
+
+	if (index-1 >= 0)
+	{
+		result = tokenBuffer[index-1];
+	}
 	return result;
 }
 
@@ -95,17 +97,17 @@ bool Lexer::loadTokens(std::string curLine)
 				auto csFound = compoundSymbols.find(cs);
 				if(csFound != compoundSymbols.end())
 				{
-					tokenBuffer.push({ csFound->second, {csFound->first}, {loc.line, i} });
+					tokenBuffer.push_back({ csFound->second, {csFound->first}, {loc.line, i} });
 					i++;
 				}
 				else
 				{
-					tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+					tokenBuffer.push_back({ sFound->second, {sFound->first}, {loc.line, i + 1} });
 				}
 			}
 			else
 			{
-				tokenBuffer.push({ sFound->second, {sFound->first}, {loc.line, i + 1} });
+				tokenBuffer.push_back({ sFound->second, {sFound->first}, {loc.line, i + 1} });
 			}
 		}
 		else
@@ -120,7 +122,7 @@ bool Lexer::loadTokens(std::string curLine)
 					if (i >= curLine.length()) break;
 				}
 				i--;
-				tokenBuffer.push({ TokenType::Number, temp, {loc.line, i + 1} });
+				tokenBuffer.push_back({ TokenType::Number, temp, {loc.line, i + 1} });
 			}
 			else if (std::isalpha(curLine[i]))
 			{
@@ -133,8 +135,8 @@ bool Lexer::loadTokens(std::string curLine)
 				}
 				i--;
 				auto kFound = keywords.find(temp);
-				if (kFound != keywords.end()) tokenBuffer.push({ kFound->second, kFound->first, {loc.line, i + 1} });
-				else tokenBuffer.push({ TokenType::Identifier, temp, {loc.line, i + 1} });
+				if (kFound != keywords.end()) tokenBuffer.push_back({ kFound->second, kFound->first, {loc.line, i + 1} });
+				else tokenBuffer.push_back({ TokenType::Identifier, temp, {loc.line, i + 1} });
 			}
 			else if(!std::isspace(curLine[i]))
 			{

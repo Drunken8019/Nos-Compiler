@@ -7,7 +7,7 @@ extern:char ReadConsoleA(long hConsoleInput, char* lpBuffer, int nNumberOfCharsT
 
 def:int main()
 {
-	let:char* string = alloc(100);
+	let:char* string = alloc(100 + 2 - 5 * 3);
 	let:int res = scan(string, 100);
 	
 	print(string, 100);
@@ -34,11 +34,4 @@ def:int scan(char* msgBuffer, int size)
 	let:int charsRead = 0;
 	ReadConsoleA(handle, msgBuffer, size, &charsRead, 0);
 	return charsRead;
-}
-
-def:void append(char** cur, char c)
-{
-	**cur = c;
-	*cur += 1;
-	return;
 }

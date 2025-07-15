@@ -6,18 +6,21 @@ class Lexer
 public:
 	Lexer();
 	Lexer(std::ifstream* i);
+	void initialize();
 	Token nextToken();
 	Token peek();
-	void saveToken(Token t);
-	void clearSaveBuffer();
-	bool useSaveBuffer = false;
+	Token peek_behind();
+	void reset();
+	bool stepBack(unsigned int len);
+	bool setTo(unsigned int index);
+	unsigned int getIndex();
 
 private:
 	bool loadTokens(std::string curLine);
 	std::ifstream* in;
 	Location loc = { 0, 0 };
-	std::queue<Token> tokenBuffer;
-	std::queue<Token> readBuffer;
+	std::vector<Token> tokenBuffer;
+	unsigned int index = 0;
 
 	std::unordered_map<std::string, TokenType> keywords = {
 		{"let", TokenType::Let},
@@ -29,11 +32,6 @@ private:
 		{"else", TokenType::Else},
 		{"while", TokenType::While},
 		{"extern", TokenType::Extern},
-		{"char", TokenType::Character},
-		{"short", TokenType::Short},
-		{"int", TokenType::Integer},
-		{"long", TokenType::Long},
-		{"void", TokenType::Void},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {

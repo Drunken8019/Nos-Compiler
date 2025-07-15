@@ -2,16 +2,24 @@
 
 void Resolver::resolveAST(Root* root)
 {
-	for(Definition *d : root->defs)
-	{
-		d->accept(this);
-	}
+    root->body.accept(this);
 }
 
-int Resolver::getPrec(Token t)
+int Resolver::getPrec(ExprNode n) //Lower value means lower operator precedence                                                                  
 {
-    switch (t.type)
+    Operator o = std::get<Operator>(n.value);
+    switch (o.tok.type)
     {
+    case Equals:
+        return -1;
+    case PlusEq:
+        return -1;
+    case MinusEq:
+        return -1;
+    case MultEq:
+        return -1;
+    case DivEq:
+        return -1;
     case DEquals:
         return 0;
     case LDBracket:
@@ -45,235 +53,131 @@ void Resolver::visit(Root* node)
     return;
 }
 
-void Resolver::visit(Expression* node, std::string des)
+void Resolver::visit(Expression* node)
 {
-    //Function identifiers
-    int fCallCount = 0;
-    std::vector<Token> newTokens;
-    for(int i = 0; i<node->tokens.size(); i++)
-    {
-        if(node->tokens[i].type == Identifier)
-        {
-            if(i+1 < node->tokens.size())
-            {
-                if(node->tokens[i+1].type == LParen)
-                {
-                    int fBegin = i;
-                    FuncCall temp = { {Identifier, node->tokens[i].value, node->tokens[i].loc} };
-                    i+=2;
-                    while(node->tokens[i].type != RParen)
-                    {
-                        Expression e = { node->tokens[i] };
-                        
-                        while(node->tokens[i].type != Comma)
-                        {
-                            if (node->tokens[i].type == RParen || i >= node->tokens.size()) break;
-                            e.tokens.push_back(node->tokens[i]);
-                            i++;
-                        }
-                        if(node->tokens[i].type == Comma)
-                        {
-                            i++;
-                        }
-                        e.accept(this);
-                        temp.params.push_back(e);
-                        e.tokens.clear();
-                        if (i >= node->tokens.size()) break;
-                    }
-                    node->exprFnTable.insert({ "f" + std::to_string(fCallCount), temp });
-                    Token t = { Identifier, "f" + std::to_string(fCallCount), {0,0} };
-                    newTokens.push_back(t);
-                    fCallCount++;
-                }
-                else
-                {
-                    newTokens.push_back(node->tokens[i]);
-                }
-            }
-            else
-            {
-                newTokens.push_back(node->tokens[i]);
-            }
-        }
-        else
-        {
-            newTokens.push_back(node->tokens[i]);
-        }
-    }
-    node->tokens = newTokens;
-
     //UnaryOperators
-    for(int i = 0; i < node->tokens.size(); i++)
+    for(int i = 0; i < node->nodes.size(); i++)
     {
-        if(blib::canBeUnary(node->tokens[i].type))
+        if(node->nodes[i].isOperator() && blib::canBeUnary(node->nodes[i].value))
         {
             if(i-1 >= 0)
             {
-                if(node->tokens[i-1].type != Identifier && node->tokens[i - 1].type != Number)
+                if(!node->nodes[i-1].isLiteral() && !node->nodes[i - 1].isVariableUse())
                 {
-                    node->tokens[i].type = blib::getUnary(node->tokens[i].type);
+                    std::get<Operator>(node->nodes[i].value).setUnary(true);
                 }
             }
             else
             {
-                node->tokens[i].type = blib::getUnary(node->tokens[i].type);
+                std::get<Operator>(node->nodes[i].value).setUnary(true);
             }
         }
     }
 
     //RPN
-    std::stack<Token> op;
+    std::stack<ExprNode> op;
 
-    for (Token t : node->tokens)
+    for (ExprNode n : node->nodes)
     {
-        if (t.type == Number || t.type == Identifier)
+        if (n.isLiteral() || n.isVariableUse() || n.isFuncCall())
         {
-            node->rpn.push(t);
-        }
-        else if (t.type == LParen)
-        {
-            op.push(t);
-        }
-        else if (t.type != Comma)
-        {
-            if (!op.empty())
+            if(n.isFuncCall())
             {
-                if (t.type == RParen)
+                FuncCall fc = std::get<FuncCall>(n.value);
+                fc.accept(this);
+                n = ExprNode(fc);
+            }
+            node->rpn.push_back(n);
+        }
+        else if (n.isLeftParen())
+        {
+            op.push(n);
+        }
+        else if (!op.empty())
+        {
+            if (n.isRightParen())
+            {
+                while (!op.top().isLeftParen())
                 {
-                    while (op.top().type != LParen)
-                    {
-                        node->rpn.push(op.top());
-                        op.pop();
-                        if (op.empty()) break;
-                    }
-                    if (!op.empty()) op.pop();
+                    node->rpn.push_back(op.top());
+                    op.pop();
+                    if (op.empty()) break;
                 }
-                else
-                {
-                    if (op.top().type != LParen)
-                    {
-                        while (getPrec(op.top()) >= getPrec(t))
-                        {
-                            node->rpn.push(op.top());
-                            op.pop();
-                            if (op.empty()) break;
-                        }
-                    }
-                    op.push(t);
-                }
+                if (!op.empty()) op.pop();
             }
             else
             {
-                op.push(t);
+                if (!op.top().isLeftParen())
+                {
+                    while (getPrec(op.top()) >= getPrec(n))
+                    {
+                        node->rpn.push_back(op.top());
+                        op.pop();
+                        if (op.empty()) break;
+                    }
+                }
+                op.push(n);
             }
+            }
+        else
+        {
+            op.push(n);
         }
     }
     while (!op.empty())
     {
-        node->rpn.push(op.top());
+        node->rpn.push_back(op.top());
         op.pop();
     }
 }
-void Resolver::visit(VarAssign* node) 
-{
-	//auto r = st->find(node->t.value);
-	//if (r == st->end()) { std::cout << "Couldn't resolve identifier \"" + node->t.value + "\"\n"; return; }
-    node->expr.accept(this);
-}
 void Resolver::visit(FuncCall* node) 
 {
-    /*if (node->f.params.size() > 4) TODO: Stack parameters
+    for(Expression *e : node->params)
     {
-        int align = 8;
-        for (int i = 4; i < node->f.params.size(); i++)
-        {
-            if (align - node->f.params[i].type.size >= 0)
-            {
-                node->var.numID = curFunc->stackSize;
-                curFunc->stackSize += node->var.type.size;
-                curFunc->varCount++;
-                spaceFor8ALign -= node->var.type.size;
-            }
-            else
-            {
-                curFunc->stackSize += spaceFor8ALign;
-                spaceFor8ALign = 8;
-                node->var.numID = curFunc->stackSize;
-                curFunc->varCount++;
-                spaceFor8ALign -= node->var.type.size;
-            }
-        }
-    }*/
-
-    for(Expression &e : node->params)
-    {
-        e.accept(this);
+        e->accept(this);
     }
 	return;
 }
 void Resolver::visit(ReturnCall* node) 
 {
-    node->expr.accept(this);
+    node->expr->accept(this);
 	return;
 }
 void Resolver::visit(IfStmnt* node) 
 {
     followerCount = 0;
-    std::unordered_map<std::string, Variable> prevSymTable = *st;
 
-    node->cond.accept(this);
-    for(Statement* s : node->body)
-    {
-        s->accept(this);
-    }
+    node->cond->accept(this);
+    
+    node->body.accept(this);
+
     if(node->next != nullptr)
     {
         node->next->accept(this);
     }
     node->followerCount = followerCount;
-    node->symbolTable = *st;
-    *st = prevSymTable;
 }
 void Resolver::visit(ElIfStmnt* node)
 {
-    std::unordered_map<std::string, Variable> prevSymTable = *st;
     followerCount++;
-    node->cond.accept(this);
-    //Mby check if expr is bool
-    for (Statement* s : node->body)
-    {
-        s->accept(this);
-    }
+    node->cond->accept(this);
+    
+    node->body.accept(this);
+
     if (node->next != nullptr)
     {
         node->next->accept(this);
     }
-    node->symbolTable = *st;
-    *st = prevSymTable;
 }
 void Resolver::visit(ElseStmnt* node) 
 {
-    std::unordered_map<std::string, Variable> prevSymTable = *st;
     followerCount++;
-    for (Statement* s : node->body)
-    {
-        s->accept(this);
-    }
-    node->symbolTable = *st;
-    *st = prevSymTable;
+    node->body.accept(this);
 }
 void Resolver::visit(WhileStmnt* node) 
 {
-    std::unordered_map<std::string, Variable> prevSymTable = *st;
-
-    node->cond.accept(this);
-    //Mby check if expr is bool
-    for (Statement* s : node->body)
-    {
-        s->accept(this);
-    }
-    node->symbolTable = *st;
-    *st = prevSymTable;
+    node->cond->accept(this);
+    node->body.accept(this);
 }
 void Resolver::visit(ClassDefin* node) 
 {
@@ -281,8 +185,8 @@ void Resolver::visit(ClassDefin* node)
 }
 void Resolver::visit(VarDef* node) 
 {
-	auto r = st->find(node->t.value);
-	if (r != st->end()) { std::cout << "Variable \"" + node->t.value + "\" already defined in scope\n"; return; }
+	auto r = st->find(node->var.t.value);
+	if (r != st->end()) { std::cout << "Variable \"" + node->var.t.value + "\" already defined in scope\n"; return; }
 	if (curFunc != nullptr)
 	{
         if(reverseStackUsage)
@@ -303,8 +207,8 @@ void Resolver::visit(VarDef* node)
                 curFunc->varCount++;
                 align -= node->var.type.getSize();
             }
-            st->insert({ node->t.value, node->var });
-            node->expr.accept(this);
+            st->insert({ node->var.t.value, node->var });
+            node->expr->accept(this);
             return;
         }
 
@@ -335,11 +239,12 @@ void Resolver::visit(VarDef* node)
     {
         spaceFor8ALign = 8;
     }
-	st->insert({ node->t.value, node->var });
-    node->expr.accept(this);
+	st->insert({ node->var.t.value, node->var });
+    node->expr->accept(this);
 }
 void Resolver::visit(FuncDef* node) 
 {
+    auto prevSt = *st;
     Register rcx = { "rcx", "ecx", "cx", "cl" };
     Register rdx = { "rdx", "edx", "dx", "dl" };
     Register r8 = { "r8", "r8d", "r8w", "r8b" };
@@ -347,43 +252,21 @@ void Resolver::visit(FuncDef* node)
 
     Register param[4] = { rcx, rdx, r8, r9 };
 
-    std::unordered_map<std::string, Function>* funcTable;
-    std::unordered_map<std::string, Variable>* symTable;
-    if(curClass == nullptr)
-    {
-        if(ft == nullptr)
-        {
-            ft = new std::unordered_map<std::string, Function>();
-        }
-        st = new std::unordered_map<std::string, Variable>();
-        funcTable = ft;
-        symTable = st;
-    }
-    else
-    {
-        funcTable = &curClass->functionTable;
-        symTable = &curClass->classSymbolTable;
-    }
 	curFunc = &node->func;
-	auto r = funcTable->find(node->t.value);
-	if (r != funcTable->end()) { std::cout << "Function \"" + node->t.value + "\" already defined in scope\n"; return; }
-    node->func.symbolTable = *symTable;
-	node->func.functionTable = funcTable;
-	st = &curFunc->symbolTable;
-	ft = curFunc->functionTable;
+
     for(int i = 0; i< node->func.params.size(); i++)
     {
         if(i < 4)
         {
-            Expression e;
-            param[i].reqSize = node->func.params[i].type.getSize();
-            e.tokens.push_back({ EXPR_TMP, param[i].getVal(), {} });
+            Expression* e = new Expression();
+            e->nodes.push_back(ExprNode(param[i]));
             VarDef vd = { node->func.params[i], {e}};
             vd.accept(this);
             node->func.params[i].numID = vd.var.numID;
         }
         else
         {
+            //Calculate stack-size for callee (stack parameters)
             int align = 8;
             if (align - node->func.params[i].type.getSize() >= 0)
             {
@@ -399,56 +282,40 @@ void Resolver::visit(FuncDef* node)
             }
         }
     }
-    int reqSizeParam = 0;
-    /*if (node->func.paramStackSpace % 16 == 0)
-    {
-        reqSizeParam = node->func.paramStackSpace;
-    }
-    else
-    {
-        reqSizeParam = 16 - (node->func.paramStackSpace % 16);
-        reqSizeParam += node->func.paramStackSpace;
-    }*/
+
     
+    int reqSizeParam = 0;
+    
+    //16 Align callee stack-size
     if(node->func.paramStackSpace != 0)
     {
         reqSizeParam = 16 - (node->func.paramStackSpace % 16);
         reqSizeParam += node->func.paramStackSpace;
         node->func.paramStackSpace = reqSizeParam;
     }
+
     if (node->func.isExtern)
     {
         node->func.paramStackSpace += 40;
     }
 
-	for (Statement* s : node->statements)
-	{
-		s->accept(this);
-	}
+    
 
+    //Calculate stack-size for function
     int reqSize = 0;
-    /*if (node->func.stackSize % 16 == 0)
-    {
-        reqSize = node->func.stackSize;
-    }
-    else
-    {
-        reqSize = 16 - (node->func.stackSize % 16);
-        reqSize += node->func.stackSize;
-    }*/
     reqSize = 16 - (node->func.stackSize % 16);
     reqSize += node->func.stackSize;
     node->func.stackSize = reqSize;
 
+    //Build VarDefs for stack param's so they can be used as variables
     if (node->func.params.size() > 4)
     {
-        //scopeOffset = node->func.paramStackSpace + 8;
         int prevStackSize = curFunc->stackSize;
         curFunc->stackSize += curFunc->paramStackSpace + 8;
         reverseStackUsage = true;
         for (int i = 4; i < node->func.params.size(); i++)
         {
-            VarDef vd = { node->func.params[i], {} };
+            VarDef vd = { node->func.params[i], {new Expression()}};
             vd.accept(this);
             node->func.params[i].numID = vd.var.numID;
         }
@@ -456,6 +323,105 @@ void Resolver::visit(FuncDef* node)
         reverseStackUsage = false;
     }
 
-    funcTable->insert({ node->t.value, node->func });
+    if (node->func.body != nullptr) node->func.body->accept(this);
+
     spaceFor8ALign = 8;
+    *st = prevSt;
+}
+void Resolver::visit(Body* node) 
+{
+    if (ft == nullptr)
+    {
+        ft = new std::unordered_map<std::string, Function>();
+    }
+    if (st == nullptr)
+    {
+        st = new std::unordered_map<std::string, Variable>();
+    }
+    auto prevFT = *ft;
+    auto prevST = *st;
+
+    if (curClass == nullptr)
+    {
+        if (ft == nullptr)
+        {
+            ft = new std::unordered_map<std::string, Function>();
+        }
+        if(st == nullptr)
+        {
+            st = new std::unordered_map<std::string, Variable>();
+        }
+    }
+    else
+    {
+        ft = &curClass->body->functionTable;
+        st = &curClass->body->symbolTable;
+    }
+    for(Statement* s : node->statements)
+    {
+        s->accept(this);
+    }
+
+    node->symbolTable = *st;
+    node->functionTable = *ft;
+
+    *st = prevST;
+    *ft = prevFT;
+}
+void Resolver::visit(DefinBody* node)
+{
+    if (ft == nullptr)
+    {
+        ft = new std::unordered_map<std::string, Function>();
+    }
+    if (st == nullptr)
+    {
+        st = new std::unordered_map<std::string, Variable>();
+    }
+    auto prevFT = *ft;
+    auto prevST = *st;
+
+    for(Definition* d : node->definitions)
+    {
+        d->acceptSig(this);
+    }
+
+    if (curClass == nullptr)
+    {
+        if (ft == nullptr)
+        {
+            ft = new std::unordered_map<std::string, Function>();
+        }
+        if (st == nullptr)
+        {
+            st = new std::unordered_map<std::string, Variable>();
+        }
+    }
+    else
+    {
+        ft = &curClass->body->functionTable;
+        st = &curClass->body->symbolTable;
+    }
+    for (Definition* d : node->definitions)
+    {
+        d->accept(this);
+    }
+
+    node->symbolTable = *st;
+    node->functionTable = *ft;
+
+    *st = prevST;
+    *ft = prevFT;
+}
+
+void Resolver::visitSignature(FuncDef* node)
+{
+    auto r = ft->find(node->func.t.value);
+    if (r != ft->end()) { std::cout << "Function \"" + node->func.t.value + "\" already defined in scope\n"; return; }
+    ft->insert({ node->func.t.value, node->func });
+}
+
+void Resolver::visitSignature(ClassDefin* node)
+{
+    return;
 }

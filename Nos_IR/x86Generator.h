@@ -41,7 +41,12 @@ public:
 	bool isUnary(Token t);
 	bool isBinary(Token t);
 	std::string resName(Token t);
+	std::string unwrap(ExprNode en);
 
+	void printInstr(ExprNode instr, ExprNode l, ExprNode r);
+	void printInstr(ExprNode instr, ExprNode l);
+
+	void mov(ExprNode des, ExprNode src);
 	void mov(Token des, Token src);
 	void mov(Token des, Register src);
 	void mov(Register des, Token src);
@@ -54,8 +59,7 @@ public:
 	void arithOp(std::string x86Operand, std::string type, std::string des, std::string src);
 
 	void visit(Root* node) override;
-	void visit(Expression* node, std::string des) override;
-	void visit(VarAssign* node) override;
+	void visit(Expression* node) override;
 	void visit(FuncCall* node) override;
 	void visit(ReturnCall* node) override;
 	void visit(IfStmnt* node) override;
@@ -63,6 +67,10 @@ public:
 	void visit(ElseStmnt* node) override;
 	void visit(WhileStmnt* node) override;
 	void visit(ClassDefin* node) override;
+	void visitSignature(ClassDefin* node) override;
 	void visit(VarDef* node) override;
 	void visit(FuncDef* node) override;
+	void visitSignature(FuncDef* node) override;
+	void visit(Body* node) override;
+	void visit(DefinBody* node) override;
 };

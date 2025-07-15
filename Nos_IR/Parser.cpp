@@ -37,513 +37,359 @@ std::vector<Token> Parser::getStatement()
 
 void Parser::parse()
 {
-	Root root;
-	std::vector<int> scopes;
-	std::vector<Token> stmnt = getStatement();
-	if(stmnt.empty()) { printErrorMsg("Empty File", {TokenType::COMPILER_EOF, "", {0, 0}}); return; }
-	else
-	{
-		root = parseRoot(stmnt);
-	}
+	lex.initialize();
+	if(lex.peek().type == COMPILER_EOF) { printErrorMsg("Empty File", {TokenType::COMPILER_EOF, "", {0, 0}}); return; }
 	
-	//resolveAST(&root);
+	Root root = parseRoot();
+	
 	res.resolveAST(&root);
 	gen.printAST(root, externs);
 }
 
-Root Parser::parseRoot(std::vector<Token> stmnt)
+Root Parser::parseRoot()
 {
-	Root res = { stmnt[0] };
-	std::vector<Token> nextStmnt = stmnt;
-	while (!nextStmnt.empty())
-	{
-		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
+	Root res = Root(lex.peek());
+	res.body = parseDefinBodyHeadless();
+	return res;
+}
 
-		Definition* d = parseDefinition(nextStmnt);
-		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
-		nextStmnt = getStatement();
+Body Parser::parseBody()
+{
+	Body res = Body(consume(LCBrace, "Expected '{'"));
+	
+	while(!check(RCBrace))
+	{
+		res.statements.push_back(parseStatement());
+	}
+	consume(RCBrace, "Expected '}'");
+	return res;
+}
+
+DefinBody Parser::parseDefinBody()
+{
+	DefinBody res = DefinBody(consume(LCBrace, "Expected '{'"));
+
+	while (!check(RCBrace))
+	{
+		res.definitions.push_back(parseDefinition());
+	}
+	consume(RCBrace, "Expected '}'");
+	return res;
+}
+
+DefinBody Parser::parseDefinBodyHeadless()
+{
+	DefinBody res;
+	while(!check(COMPILER_EOF))
+	{
+		res.definitions.push_back(parseDefinition());
 	}
 	return res;
 }
 
-ClassDefin Parser::parseClassDef(std::vector<Token> stmnt)
+ClassDefin Parser::parseClassDef()
 {
-	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Identifier) { printErrorMsg("Expected identifier after \"class\"", stmnt[1]); return {errTok}; }
-	else if (stmnt[2].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt[1]); return {errTok}; }
-	//---------------------------- END ------------------------------
-
-	ClassDefin res = { stmnt[1] };
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
-	{
-		if (nextStmnt[nextStmnt.size() - 1].type == TokenType::RCBrace) { break; }
-
-		Definition* d = parseDefinition(nextStmnt);
-		if (d->t.type != TokenType::COMPILER_ERROR) res.defs.push_back(d);
-		nextStmnt = getStatement();
-	}
+	ClassDefin res = consume(Identifier, "Expected identifier after 'class'");
+	//TODO: complete class parsing
 	return res;
 }
 
-Definition* Parser::parseDefinition(std::vector<Token> stmnt)
+Definition* Parser::parseDefinition()
 {
-	switch (stmnt[0].type)
+	switch (lex.peek().type)
 	{
 	case TokenType::Let:
 	{
-		Definition* d = new VarDef(parseVarDef(stmnt));
+		consume(Let, "");
+		Definition* d = new VarDef(parseVarDef());
 		
 		return d;
 		break;
 	}
 	case TokenType::Define:
 	{
-		Definition* d = new FuncDef(parseFunctionDef(stmnt));
+		consume(Define, "");
+		Definition* d = new FuncDef(parseFunctionDef());
 		return d;
 		break;
 	}
 	case TokenType::Extern:
 	{
-		Definition* d = new FuncDef(parseExternDef(stmnt));
+		consume(Extern, "");
+		Definition* d = new FuncDef(parseExternDef());
 		return d;
 		break;
 	}
 	default:
-		//-------------------- Syntax-Error handling --------------------
-		printErrorMsg("Only variable definitions or function definitions allowed", stmnt[0]);
-		//---------------------------- END ------------------------------
+		printErrorMsg("Only variable definitions or function definitions allowed", lex.peek());
 		Definition* d = new Definition(errTok);
 		return d;
 		break;
 	}
 }
 
-FuncDef Parser::parseFunctionDef(std::vector<Token> stmnt)
+FuncDef Parser::parseFunctionDef()
 {
-	Type t;
-	int i = 0;
-	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"def\"", stmnt[1]); return { errTok }; }
-	else
+	FuncDef fd;
+	consume(Colon, "Expected ':' after 'def'");
+	fd.func.retType = getType(consume(Identifier, "Expected type identifier"));
+	while (match(Asteriks))
 	{
-		t = getType(stmnt[2]);
-		i = 3;
-		while (stmnt[i].type == Asteriks)
-		{
-			t.isPtr = true;
-			t.size = 8;
-			t.ptrDepth++;
-			i++;
-		}
-	}
-	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
-	else if (stmnt[i+1].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
-	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
-	if(stmnt.back().type != TokenType::LCBrace) { printErrorMsg("Expected \"{\"", stmnt.back()); return { errTok }; }
-	//---------------------------- END ------------------------------
-	Variable v = { emptyTok, {} };
-	FuncDef fd = { stmnt[i] };
-	fd.func.retType = t;
-	i += 2;
-	for (; i < stmnt.size()-1; i++)
-	{
-		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
-		{
-			v.type = getType(stmnt[i]);
-			i++;
-			while(stmnt[i].type == Asteriks)
-			{
-				v.type.isPtr = true;
-				v.type.size = 8;
-				v.type.ptrDepth++;
-				i++;
-			}
-			v.t = stmnt[i];
-			i++;
-		}
-
-		if(v.t.type != COMPILER_EMPTY)
-		{
-			fd.func.params.push_back(v);
-		}
+		fd.func.retType.isPtr = true;
+		fd.func.retType.ptrDepth++;
 	}
 
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
+	fd.func.t = consume(Identifier, "Expected identifier");
+	consume(LParen, "Expected '('");
+	while (!check(RParen))
 	{
-		if (nextStmnt.back().type == TokenType::RCBrace)
-		{
-			break;
-		}
-		Statement* s = parseStatement(nextStmnt);
-		fd.statements.push_back(s);
-		nextStmnt = getStatement();
+		fd.func.params.push_back(parseParamDef());
 	}
+	consume(RParen, "Expected ')'");
+	fd.func.body = new Body(parseBody());
 	return fd;
 }
 
-FuncDef Parser::parseExternDef(std::vector<Token> stmnt)
+FuncDef Parser::parseExternDef()
 {
-	Type t;
-	int i = 0;
-	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"extern\"", stmnt[1]); return { errTok }; }
-	else
+	FuncDef fd;
+	consume(Colon, "Expected ':' after 'extern'");
+	fd.func.retType = getType(consume(Identifier, "Expected type identifier"));
+	while (match(Asteriks))
 	{
-		t = getType(stmnt[2]);
-		i = 3;
-		while (stmnt[i].type == Asteriks)
-		{
-			t.isPtr = true;
-			t.size = 8;
-			t.ptrDepth++;
-			i++;
-		}
+		fd.func.retType.isPtr = true;
+		fd.func.retType.ptrDepth++;
 	}
-	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { errTok }; }
-	else if (stmnt[i+1].type != TokenType::LParen) { printErrorMsg("Expected \"(\"", stmnt[4]); return { errTok }; }
-	else if (stmnt[stmnt.size() - 2].type != TokenType::RParen) { printErrorMsg("Expected \")\"", stmnt[stmnt.size() - 2]); return { errTok }; }
-	if (stmnt.back().type != TokenType::Semicolon) { printErrorMsg("Expected \";\"", stmnt.back()); return { errTok }; }
-	//---------------------------- END ------------------------------
-	Variable v = { emptyTok, {} };
-	FuncDef fd = { stmnt[i] };
-	fd.func.retType = t;
-	i += 2;
-	for (; i < stmnt.size() - 1; i++)
+
+	fd.func.t = consume(Identifier, "Expected identifier");
+	consume(LParen, "Expected '('");
+	while (!check(RParen))
 	{
-		if (stmnt[i].type != TokenType::Comma && stmnt[i].type != TokenType::RParen)
-		{
-			v.type = getType(stmnt[i]);
-			i++;
-			while (stmnt[i].type == Asteriks)
-			{
-				v.type.isPtr = true;
-				v.type.size = 8;
-				v.type.ptrDepth++;
-				i++;
-			}
-			v.t = stmnt[i];
-			i++;
-		}
-		if (v.t.type != COMPILER_EMPTY)
-		{
-			fd.func.params.push_back(v);
-		}
+		fd.func.params.push_back(parseParamDef());
 	}
+	consume(RParen, "Expected ')'");
+	consume(Semicolon, "Expected ';");
 	fd.func.isExtern = true;
-	externs.push_back(fd.t.value);
+	externs.push_back(fd.func.t.value);
 	return fd;
 }
 
-Statement* Parser::parseStatement(std::vector<Token> stmnt)
+Variable Parser::parseParamDef()
 {
-	switch (stmnt[0].type)
+	Variable v;
+	v.type = getType(consume(Identifier, "Expected type identifier"));
+	while (match(Asteriks))
+	{
+		v.type.isPtr = true;
+		v.type.ptrDepth++;
+	}
+	v.t = consume(Identifier, "Expected identifier");
+	match(Comma); //Only steps over the comma if one is found, if not, lexer doesnt change position
+	return v;
+}
+
+Statement* Parser::parseStatement()
+{
+	Statement* res = nullptr;
+	switch (lex.peek().type)
 	{
 	case TokenType::Let:
-		return new VarDef(parseVarDef(stmnt));
+		consume(Let, "");
+		res =  new VarDef(parseVarDef());
 		break;
 
-	case TokenType::Identifier:
-		if (stmnt[1].type == TokenType::LParen) return new FuncCall(parseFunctionCall(stmnt));
-		else return new VarAssign(parseVarAsign(stmnt));
-		break;
-
-	case TokenType::Extern:
-		return new FuncCall(parseFunctionCall(stmnt));
-		break;
 	case TokenType::Return:
-		return new ReturnCall(parseFuncReturn(stmnt));
+		consume(Return, "");
+		return new ReturnCall(parseFuncReturn());
 		break;
 	case TokenType::If:
-		return new IfStmnt(parseIfStmnt(stmnt));
+		consume(If, "");
+		return new IfStmnt(parseIfStmnt());
 		break;
 	case TokenType::Elif:
-		printErrorMsg("elif must be preceeded by if or elif", stmnt[0]);
+		consume(Elif, "");
+		printErrorMsg("'elif' must be preceeded by 'if' or 'elif'", lex.peek());
 		break;
 	case TokenType::Else:
-		printErrorMsg("else must be preceeded by if or elif", stmnt[0]);
+		consume(Else, "");
+		printErrorMsg("'else' must be preceeded by 'if' or 'elif'", lex.peek());
 		break;
 	case TokenType::While:
-		return new WhileStmnt(parseWhileStmnt(stmnt));
-		break;
-	case TokenType::Asteriks:
-		return new VarAssign(parseVarAsign(stmnt));
+		consume(While, "");
+		return new WhileStmnt(parseWhileStmnt());
 		break;
 	default:
-		printErrorMsg("\"" + stmnt[0].value + "\" is not a statement", stmnt[0]);
+		return new Expression(parseExpression());
 	}
-	return new Statement(errTok);
+
+	return res;
 }
 
-VarDef Parser::parseVarDef(std::vector<Token> stmnt)
+VarDef Parser::parseVarDef()
 {
-	Type t;
-	//-------------------- Syntax-Error handling --------------------
-	if (stmnt[1].type != TokenType::Colon) { printErrorMsg("Expected \":\" after \"let\"", stmnt[1]); return { {stmnt[3], {}}, {{errTok}} }; }
-	else	
-	{
-		t = getType(stmnt[2]);
-	}
-	Variable v = { stmnt[3], {t} };
-	
-	int i = 3;
-	while(stmnt[i].type == TokenType::Asteriks) 
-	{ 
-		v.type.isPtr = true;
-		v.type.size = 8;
-		v.type.ptrDepth++;
-		i++;
-	}
-	if (stmnt[i].type != TokenType::Identifier) { printErrorMsg("Expected identifier", stmnt[3]); return { {stmnt[3], {}}, {{errTok}} }; }
-	v.t = stmnt[i];
-	i++;
+	const Operator eq = Operator(Token(Equals, "=", Location(0, 0)));
+	Variable v;
+	Type type;
+	Token matchedTok;
 
-	if(stmnt[i].type == TokenType::LSqParen)
+	consume(Colon, "Expected ':' after 'let'");
+	type = getType(consume(Identifier, "Expected type identifier"));
+	v.type = type;
+
+	while(match(Asteriks))
 	{
-		i++;
-		v.type.isArray = true;
-		v.type.arraySize = std::stoi(stmnt[i].value);
-		i++;
-		if(stmnt[i].type != TokenType::RSqParen)
-		{
-			printErrorMsg("Expected \"]\"", stmnt[i]); 
-			return { {stmnt[i], {}}, {{errTok}} };
-		}
+		v.type.isPtr = true;
+		v.type.ptrDepth++;
 	}
-	else if (stmnt[i].type == TokenType::Semicolon) 
-	{ 
-		return { {stmnt[i-1], {}}, {{emptyTok}}};
-	}
-	else if (stmnt[i].type != TokenType::Equals) { printErrorMsg("Expected \"=\" or \";\"", stmnt[i]); return { {stmnt[i-1], {}}, {{errTok}} }; }
-	//---------------------------- END ------------------------------
+
+	v.t = consume(Identifier, "Expected identifier");
 	
-	Expression e;
-	i++;
-	for(; i<stmnt.size(); i++)
+	Expression* e = nullptr;;
+	if(match(Equals))
 	{
-		if (stmnt[i].type == TokenType::Semicolon) break;
-		e.tokens.push_back(stmnt[i]);
+		e = new Expression(parseExpression());
+		e->nodes.insert(e->nodes.begin(), ExprNode(eq));
+		e->nodes.insert(e->nodes.begin(),  ExprNode(VariableUse(v.t)));
 	}
-	return { v, e };
+	
+	VarDef res = VarDef(v, e);
+
+	return res;
 }
 
-FuncCall Parser::parseFunctionCall(std::vector<Token> stmnt)
+FuncCall Parser::parseFunctionCall()
 {
 	FuncCall fc;
-	fc = { stmnt[0] };
-	if (stmnt[1].type ==TokenType::LParen && stmnt[2].type == TokenType::RParen) return fc;
-
-	int i = 2;
-	Expression e = {stmnt[i]};
-	for (; i < stmnt.size(); i++)
+	fc.t = consume(Identifier, "Expected Identifier");
+	consume(LParen, "Expected '('");
+	while(!check(RParen))
 	{
-		if (stmnt[i].type == TokenType::RParen) 
-		{
-			fc.params.push_back(e);
-			break;
-		}
-		if(stmnt[i].type != TokenType::Comma)
-		{
-			e.tokens.push_back(stmnt[i]);
-		}
-		else
-		{
-			fc.params.push_back(e);
-			e.tokens.clear();
-		}
+		fc.params.push_back(new Expression(parseExpression()));
 	}
+	consume(RParen, "Expected ')'");
 	return fc;
 }
 
-VarAssign Parser::parseVarAsign(std::vector<Token> stmnt)
+ReturnCall Parser::parseFuncReturn()
 {
-	Expression e;
-	VarAssign va = { stmnt[0], {} };
-	int i = 0;
-	while (stmnt[i].type == TokenType::Asteriks)
-	{
-		va.ptrAccessDepth++;
-		va.isPtrAccess = true;
-		i++;
-	}
-	va.t = stmnt[i];
-	i++;
-
-	if (stmnt[i].type == TokenType::Semicolon) { printErrorMsg("Not a statement", stmnt[1]); return { errTok, {} }; }
-	//else if (stmnt[1].type != TokenType::Equals) { printErrorMsg("Expected \"=\"", stmnt[1]); return { errTok, {} }; }
-	switch(stmnt[i].type)
-	{
-	case Equals:
-		e.resOperator = { Equals, "=", {} };
-		break;
-	case PlusEq:
-		e.resOperator = { Plus, "+=", {} };
-		break;
-	case MinusEq:
-		e.resOperator = { Minus, "-=", {} };
-		break;
-	case MultEq:
-		e.resOperator = { Asteriks, "*=", {} };
-		break;
-	case DivEq:
-		e.resOperator = { Div, "/=", {} };
-		break;
-	default:
-		printErrorMsg("Expected assignment operator", stmnt[1]); 
-		return { errTok, {} };
-	}
-	
-	i++;
-
-	for(; i<stmnt.size(); i++)
-	{
-		if (stmnt[i].type == TokenType::Semicolon) break;
-		e.tokens.push_back(stmnt[i]);
-	}
-	va.expr = e;
-	return va;
-}
-
-ReturnCall Parser::parseFuncReturn(std::vector<Token> stmnt)
-{
-	Expression e;
-	ReturnCall rc = { stmnt[0], e };
-	for(int i = 1; i<stmnt.size(); i++)
-	{
-		if (stmnt[i].type == TokenType::Semicolon) break;
-		e.tokens.push_back(stmnt[i]);
-	}
-	rc.expr = e;
+	ReturnCall rc;
+	rc.expr = new Expression(parseExpression());
 	return rc;
 }
 
-IfStmnt Parser::parseIfStmnt(std::vector<Token> stmnt)
+IfStmnt Parser::parseIfStmnt()
 {
-	IfStmnt res = { stmnt[0] };
-	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after if", stmnt[1]); return {errTok}; }
-	int i = 2;
-	for(; i<stmnt.size(); i++)
+	IfStmnt res = IfStmnt(lex.peek_behind());
+	consume(LParen, "Expected '('");
+	res.cond = new Expression(parseExpression());
+	consume(RParen, "Expected ')'");
+	res.body = parseBody();
+	if(match(Elif))
 	{
-		if(stmnt[i].type == TokenType::RParen)
-		{
-			break;
-		}
-		res.cond.tokens.push_back(stmnt[i]);
+		res.next = new ElIfStmnt(parseElIfStmnt());
 	}
-	i++;
-	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before if-body", stmnt[i]); return { errTok }; }
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
+	else if(match(Else))
 	{
-		if (nextStmnt.back().type == TokenType::RCBrace)
-		{
-			break;
-		}
-		Statement* s = parseStatement(nextStmnt);
-		res.body.push_back(s);
-		nextStmnt = getStatement();
-	}
-	if(lex.peek().type == TokenType::Elif)
-	{
-		nextStmnt = getStatement();
-		res.next = new ElIfStmnt(parseElIfStmnt(nextStmnt));
-	}
-	else if(lex.peek().type == TokenType::Else)
-	{
-		nextStmnt = getStatement();
-		res.next = new ElseStmnt(parseElseStmnt(nextStmnt));
+		res.next = new ElseStmnt(parseElseStmnt());
 	}
 	return res;
 }
 
-ElIfStmnt Parser::parseElIfStmnt(std::vector<Token> stmnt)
+ElIfStmnt Parser::parseElIfStmnt()
 {
-	ElIfStmnt res = stmnt[0];
-	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after elif", stmnt[1]); return { errTok }; }
-	int i = 2;
-	for (; i < stmnt.size(); i++)
+	ElIfStmnt res = ElIfStmnt(lex.peek_behind());
+	consume(LParen, "Expected '('");
+	res.cond = new Expression(parseExpression());
+	consume(RParen, "Expected ')'");
+	res.body = parseBody();
+	if (match(Elif))
 	{
-		if (stmnt[i].type == TokenType::RParen)
-		{
-			break;
-		}
-		res.cond.tokens.push_back(stmnt[i]);
+		res.next = new ElIfStmnt(parseElIfStmnt());
 	}
-	i++;
-	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before elif-body", stmnt[i]); return { errTok }; }
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
+	else if (match(Else))
 	{
-		if (nextStmnt.back().type == TokenType::RCBrace)
-		{
-			break;
-		}
-		Statement* s = parseStatement(nextStmnt);
-		res.body.push_back(s);
-		nextStmnt = getStatement();
-	}
-
-	if (lex.peek().type == TokenType::Elif)
-	{
-		nextStmnt = getStatement();
-		res.next = new ElIfStmnt(parseElIfStmnt(nextStmnt));
-	}
-	else if (lex.peek().type == TokenType::Else)
-	{
-		nextStmnt = getStatement();
-		res.next = new ElseStmnt(parseElseStmnt(nextStmnt));
+		res.next = new ElseStmnt(parseElseStmnt());
 	}
 	return res;
 }
 
-ElseStmnt Parser::parseElseStmnt(std::vector<Token> stmnt)
+ElseStmnt Parser::parseElseStmnt()
 {
-	ElseStmnt res = stmnt[0];
-	if(stmnt[1].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before else-body", stmnt[1]); return { errTok }; }
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
+	ElseStmnt res = ElseStmnt(lex.peek_behind());
+	res.body = parseBody();
+	return res;
+}
+
+WhileStmnt Parser::parseWhileStmnt()
+{
+	WhileStmnt res = WhileStmnt(lex.peek_behind());
+	consume(LParen, "Expected '('");
+	res.cond = new Expression(parseExpression());
+	consume(RParen, "Expected ')'");
+	res.body = parseBody();
+	return res;
+}
+
+Expression Parser::parseExpression()
+{
+	Expression res;
+	while(!match(Semicolon) && !match(Comma))
 	{
-		if (nextStmnt.back().type == TokenType::RCBrace)
+		ExprNode en = parseExprNode();
+		if (!en.isEmpty)
 		{
-			break;
+			res.nodes.push_back(en);
 		}
-		Statement* s = parseStatement(nextStmnt);
-		res.body.push_back(s);
-		nextStmnt = getStatement();
+		else break;
 	}
 	return res;
 }
 
-WhileStmnt Parser::parseWhileStmnt(std::vector<Token> stmnt)
+ExprNode Parser::parseExprNode()
 {
-	WhileStmnt res = { stmnt[0] };
-	if (stmnt[1].type != TokenType::LParen) { printErrorMsg("Expected \"(\" after while", stmnt[1]); return { errTok }; }
-	int i = 2;
-	for (; i < stmnt.size(); i++)
+	if(matchAny(Equals, Plus, Minus, Asteriks, Div, LDBracket, RDBracket, Ampersand, Pipe, DEquals, LDBEq, RDBEq, NotEq, PlusEq, MinusEq, DivEq, MultEq, DAmpersand, DPipe, BoolNeg))
 	{
-		if (stmnt[i].type == TokenType::RParen)
-		{
-			break;
-		}
-		res.cond.tokens.push_back(stmnt[i]);
+		return ExprNode(Operator(lex.peek_behind()));
+		//return parseOperator();
 	}
-	i++;
-	if (stmnt[i].type != TokenType::LCBrace) { printErrorMsg("Expected \"{\" before while-body", stmnt[i]); return { errTok }; }
-	std::vector<Token> nextStmnt = getStatement();
-	while (!nextStmnt.empty())
+	else if(check(LParen))
 	{
-		if (nextStmnt.back().type == TokenType::RCBrace)
-		{
-			break;
-		}
-		Statement* s = parseStatement(nextStmnt);
-		res.body.push_back(s);
-		nextStmnt = getStatement();
+		return ExprNode(Operator(open(LParen, "Expected '('")));
 	}
-	return res;
+	else if(check(RParen))
+	{
+		if(close(RParen, "Expected ')'").type == COMPILER_ERROR)
+		{
+			return ExprNode();
+		}
+	}
+	else if(matchAny(Number))
+	{
+		return ExprNode(Literal(lex.peek_behind()));
+	}
+	else if(match(Identifier))
+	{
+		if(match(LParen))
+		{
+			lex.stepBack(2);
+			return ExprNode(parseFunctionCall());
+		}
+		else
+		{
+			return ExprNode(VariableUse(lex.peek_behind()));
+		}
+	}
+
+	else
+	{
+		printErrorMsg("'" + lex.peek().value + "' is not valid inside an expression", lex.peek());
+		lex.nextToken();
+		return ExprNode();
+	}
 }
 
+
+//HELPER-Functions
 void Parser::printErrorMsg(std::string msg, Token t)
 {
 	std::cout << std::endl;
@@ -553,42 +399,59 @@ void Parser::printErrorMsg(std::string msg, Token t)
 
 Type Parser::getType(Token tok)
 {
-	Type t;
-	switch (tok.type)
+	auto fPrim = primTypes.find(tok.value);
+	if (fPrim != primTypes.end()) return fPrim->second;
+	else if (tok.type == Identifier) 
 	{
-	case TokenType::Character:
-		t.size = 1;
-		t.nonPointerSize = 1;
-		t.name = "char";
-		break;
-	case TokenType::Short:
-		t.size = 2;
-		t.nonPointerSize = 2;
-		t.name = "short";
-		break;
-	case TokenType::Integer:
-		t.size = 4;
-		t.nonPointerSize = 4;
-		t.name = "int";
-		break;
-	case TokenType::Long:
-		t.size = 8;
-		t.nonPointerSize = 8;
-		t.name = "long";
-		break;
-	case TokenType::Void:
-		t.size = 8;
-		t.nonPointerSize = -1;
-		t.name = "void";
-		break;
-	case TokenType::Identifier:
-		t.size = 0;
-		t.nonPointerSize = 0;
-		t.name = tok.value;
-		break;
-	default:
-		printErrorMsg("\"" + tok.value + "\" is not a valid type identifier", tok);
-		return t;
+		return Type(0, tok.value);
 	}
-	return t;
+	else 
+	{
+		printErrorMsg("\"" + tok.value + "\" is not a valid type identifier", tok);
+	}
+	return Type();
+}
+
+bool Parser::check(TokenType expected)
+{
+	return expected == lex.peek().type;
+}
+
+bool Parser::match(TokenType expected)
+{
+	if(check(expected))
+	{
+		lex.nextToken();
+		return true;
+	}
+	return false;;
+}
+
+template<typename... TokenTypes>
+bool Parser::matchAny(TokenTypes... types)
+{
+	return (... || match(types));
+}
+
+Token Parser::consume(TokenType t, const std::string& errorMsg)
+{
+	if(!match(t))
+	{
+		printErrorMsg(errorMsg, lex.peek());
+		return errTok;
+	}
+	return lex.peek_behind();
+}
+
+Token Parser::open(TokenType t, const std::string& errorMsg)
+{
+	openGroups.push(t);
+	return consume(t, errorMsg);
+}
+
+Token Parser::close(TokenType t, const std::string& errorMsg)
+{
+	if (openGroups.size() == 0) return errTok;
+	else if (openGroups.top()+1 == t) return consume(t, errorMsg); //Takes advantage of opening Parenthesis always being 1 ahead in the enum e.g. '(' = 9 and ')' = 10
+	else return errTok;
 }
