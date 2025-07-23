@@ -2,6 +2,7 @@
 #include "Lexer.h"
 #include "x86Generator.h"
 #include "Resolver.h"
+#include "TypeChecker.h"
 
 class Parser
 {
@@ -15,6 +16,7 @@ public:
 	Token errTok = { TokenType::COMPILER_ERROR, "", {0, 0} };
 	std::vector<std::string> externs;
 	std::stack<TokenType> openGroups;
+	const Operator eq = Operator(Token(Equals, "=", Location(0, 0)));
 	std::unordered_map<std::string, Type> primTypes = { {"char", Type(1, "char")},
 		{"short", Type(2, "short")}, 
 		{"int", Type(4, "int")}, 
@@ -58,5 +60,6 @@ public:
 	Lexer lex;
 	x86Generator gen;
 	Resolver res;
+	TypeChecker tcheck;
 };
 

@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <variant>
+#include <limits>
 
 class Visitor;
 class FuncCall;
@@ -39,10 +40,10 @@ enum TokenType
 	EXPR_DEST, EXPR_TMP, EXPR_FN,
 	/*Symbols*/
 	LCBrace, RCBrace, LParen, RParen, LSqParen, RSqParen, Equals, Semicolon, Comma,
-	Plus, Minus, Asteriks, Div, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
+	Plus, Minus, Asteriks, Div, Modulo, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
 	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus, BoolNeg,
 	/*Keywords*/
-	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, Character, Short, Integer, Long, Void,
+	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, NullPtr, String, Character
 };
 
 enum AST
@@ -53,6 +54,12 @@ enum AST
 struct Location
 {
 	int line, column;
+
+	Location() : line(0), column(0)
+	{}
+
+	Location(int l, int c) : line(l), column(c)
+	{}
 };
 
 struct Token
@@ -60,6 +67,11 @@ struct Token
 	TokenType type;
 	std::string value;
 	Location loc;
+
+	Token(){}
+
+	Token(TokenType t, std::string v, Location l) : type(t), value(v), loc(l)
+	{}
 };
 
 class ASTNode
@@ -107,13 +119,19 @@ public:
 	bool isUnary = false;
 	bool isBinary = true;
 	bool isMemOp = false;
+	bool isAssign = false;
 
 	std::unordered_map<TokenType, std::string> operatorKeyword = {
 	{TokenType::Equals, "mov"},
+	{TokenType::PlusEq, "add"},
+	{TokenType::MinusEq, "sub"},
+	{TokenType::MultEq, "imul"},
+	{TokenType::DivEq, "div"},
 	{TokenType::Plus, "add"},
 	{TokenType::Minus, "sub"},
 	{TokenType::Asteriks, "imul"},
-	{TokenType::Div, "div"},
+	{TokenType::Div, "idiv"},
+	{TokenType::Modulo, "idiv"},
 	{TokenType::Ampersand, "and"},
 	{TokenType::Pipe, "or"},
 	{TokenType::DEquals, "sete"},
@@ -125,6 +143,14 @@ public:
 	{TokenType::UMinus, "neg"},
 	{TokenType::UAmpersand, "lea"},
 	{TokenType::UAsteriks, "mov"}, //Hopefully this doesnt lead to problems
+	};
+
+	std::unordered_map<TokenType, std::string> assignOps = {
+	{TokenType::Equals, "mov"},
+	{TokenType::PlusEq, "add"},
+	{TokenType::MinusEq, "sub"},
+	{TokenType::MultEq, "imul"},
+	{TokenType::DivEq, "div"},
 	};
 
 	std::unordered_map<TokenType, TokenType> binToUnary = {
@@ -143,6 +169,12 @@ public:
 		else
 		{
 			keyWord = "Unrecognized Operator";
+		}
+
+		auto assignKey = assignOps.find(t.type);
+		if(assignKey != assignOps.end())
+		{
+			isAssign = true;
 		}
 	}
 
@@ -191,37 +223,12 @@ public:
 	}
 };
 
-class Literal
-{
-public:
-	std::string val = "";
-
-	Literal(Token t) : val(t.value){}
-	Literal(std::string s) : val(s){}
-	Literal(){}
-};
-
-class Register
-{
-public:
-	std::string qReg = "";
-	std::string dReg = "";
-	std::string wReg = "";
-	std::string bReg = "";
-
-	Register(std::string q, std::string d, std::string w, std::string b) :
-		qReg(q), dReg(d), wReg(w), bReg(b)
-	{}
-
-	Register()
-	{}
-};
-
 class Type {
 public:
 	int size;
 	int nonPointerSize;
 	std::string name;
+	bool isPrim = true; //Carefull when implementing user defined types, that this gets set to false
 	bool isPtr = false;
 	int ptrDepth = 0;
 	bool isArray = false;
@@ -236,6 +243,30 @@ public:
 		return size * arraySize;
 	}
 
+	bool isCompatibleWith(const Type& other) const {
+
+		if(isArray)
+		{
+			if (arraySize != other.arraySize) return false;
+		}
+
+		if (isPtr)
+		{
+			if (ptrDepth == -1 || other.ptrDepth == -1)	return true;
+			else return (ptrDepth == other.ptrDepth);
+		}
+		else if(isPrim)
+		{
+			return true;
+			//return this->size >= other.size; 
+			// Implicit casting from e.g. long to int is now possible
+		}
+		else
+		{
+			return name == other.name;
+		}
+	}
+
 	Type() : size(4), name("int"), nonPointerSize(4)
 	{
 	}
@@ -243,6 +274,36 @@ public:
 	Type(int s, std::string n) : size(s), name(n), nonPointerSize(s)
 	{
 	}
+};
+
+class Register
+{
+public:
+	std::string qReg = "";
+	std::string dReg = "";
+	std::string wReg = "";
+	std::string bReg = "";
+	Type type;
+
+	Register(std::string q, std::string d, std::string w, std::string b) :
+		qReg(q), dReg(d), wReg(w), bReg(b)
+	{
+	}
+
+	Register()
+	{
+	}
+};
+
+class Literal
+{
+public:
+	std::string val = "";
+	Type type;
+
+	Literal(Token t) : val(t.value) {}
+	Literal(std::string s) : val(s) {}
+	Literal() {}
 };
 
 class Variable
@@ -272,7 +333,7 @@ public:
 	VariableUse(Token t) : identifier(t.value)
 	{}
 
-	VariableUse(Variable var) : v(var)
+	VariableUse(Variable var) : v(var), identifier(var.t.value)
 	{}
 };
 
@@ -286,6 +347,7 @@ public:
 	int paramStackSpace = 0;
 	int stackSize = 0;
 	int varCount = 1;
+	int maxExprDepth = 0;
 	bool isExtern = false;
 
 	Function()
@@ -509,7 +571,6 @@ class FuncDef : public Definition
 public:
 	Function func;
 
-	int stackSpace = 0;
 
 	FuncDef()
 	{}
@@ -573,6 +634,9 @@ public:
 	std::vector<ExprNode> nodes;
 	std::vector<ExprNode> rpn;
 	std::unordered_map<std::string, FuncCall*> exprFnTable;
+	std::queue<Type> implicitConv;
+	int depth = 0;
+	Type calcType;
 
 	Expression()
 	{

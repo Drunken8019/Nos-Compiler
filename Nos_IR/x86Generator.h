@@ -24,9 +24,16 @@ public:
 	Register r11 = { "r11", "r11d", "r11w", "r11b" };
 	Register r12 = { "r12", "r12d", "r12w", "r12b" };
 	Register ptrR12 = { "[r12]", "[r12]", "[r12]", "[r12]" };
-	Register ptrR13 = { "[r13]", "[r13]", "[r13]", "[r13]" };
+	Register r13 = { "r13", "r13d", "r13w", "r13b" };
+	Register r14 = { "r14", "r14d", "r14w", "r14b" };
+	Register r15 = { "r15", "r15d", "r15w", "r15b" };
 
 	Register param[4] = {rcx, rdx, r8, r9};
+
+	std::deque<ExprNode> temp = { ExprNode(rdi), ExprNode(r11), ExprNode(r13), ExprNode(r14), ExprNode(r15) };
+	std::queue<ExprNode> freeTemp = std::queue<ExprNode>(temp);
+	
+	std::vector<ExprNode> inUseTemp;
 
 	x86Generator(){};
 	x86Generator(std::ofstream* o) : out(o) {};
@@ -34,29 +41,21 @@ public:
 	void printAST(Root root, std::vector<std::string> externs);
 
 	void printDefaultHeader(std::vector<std::string> externs);
-	std::string sizeWord(Token var);
+	std::string sizeWord(Type t);
 	std::string chooseReg(Register reg);
+	std::string x86Generator::chooseReg(Register reg, Type t);
 	std::string keyWord(Token t);
-	bool isCmp(Token t);
-	bool isUnary(Token t);
-	bool isBinary(Token t);
+	bool isCmp(Operator o);
 	std::string resName(Token t);
 	std::string unwrap(ExprNode en);
+	std::string x86Generator::unwrap(ExprNode en, Type t);
+	Type getType(ExprNode n);
 
-	void printInstr(ExprNode instr, ExprNode l, ExprNode r);
-	void printInstr(ExprNode instr, ExprNode l);
+	ExprNode printInstr(ExprNode instr, ExprNode l, ExprNode r);
+	ExprNode printInstr(ExprNode instr, ExprNode l);
+	int isTempInUse(ExprNode n);
 
 	void mov(ExprNode des, ExprNode src);
-	void mov(Token des, Token src);
-	void mov(Token des, Register src);
-	void mov(Register des, Token src);
-	void mov(Register des, Register src);
-	void mov(std::string type, std::string des, std::string src);
-
-	void arithOp(Token op, Token des, Token src);
-	void arithOp(Token op, Token des, Register src);
-	void arithOp(Token op, Register des, Token src);
-	void arithOp(std::string x86Operand, std::string type, std::string des, std::string src);
 
 	void visit(Root* node) override;
 	void visit(Expression* node) override;

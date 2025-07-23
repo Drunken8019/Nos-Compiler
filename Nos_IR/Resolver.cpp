@@ -7,6 +7,7 @@ void Resolver::resolveAST(Root* root)
 
 int Resolver::getPrec(ExprNode n) //Lower value means lower operator precedence                                                                  
 {
+    if (!n.isOperator()) return 0;
     Operator o = std::get<Operator>(n.value);
     switch (o.tok.type)
     {
@@ -40,6 +41,8 @@ int Resolver::getPrec(ExprNode n) //Lower value means lower operator precedence
         return 2;
     case Div:
         return 2;
+    case Modulo:
+        return 2;
     case UAmpersand:
         return 3;
     case UAsteriks:
@@ -48,7 +51,7 @@ int Resolver::getPrec(ExprNode n) //Lower value means lower operator precedence
     return 0;
 }
 
-void Resolver::visit(Root* node)
+void Resolver::visit(Root* node) //TODO: remove starting functions like resolveAst, just visite the root node instead
 {
     return;
 }
@@ -62,7 +65,7 @@ void Resolver::visit(Expression* node)
         {
             if(i-1 >= 0)
             {
-                if(!node->nodes[i-1].isLiteral() && !node->nodes[i - 1].isVariableUse())
+                if(node->nodes[i-1].isOperator() || node->nodes[i - 1].isLeftParen())
                 {
                     std::get<Operator>(node->nodes[i].value).setUnary(true);
                 }
@@ -76,10 +79,11 @@ void Resolver::visit(Expression* node)
 
     //RPN
     std::stack<ExprNode> op;
+    std::vector<ExprNode> buffer;
 
     for (ExprNode n : node->nodes)
     {
-        if (n.isLiteral() || n.isVariableUse() || n.isFuncCall())
+        if (n.isLiteral() || n.isVariableUse() || n.isFuncCall() || n.isRegister())
         {
             if(n.isFuncCall())
             {
@@ -132,14 +136,78 @@ void Resolver::visit(Expression* node)
 }
 void Resolver::visit(FuncCall* node) 
 {
-    for(Expression *e : node->params)
+    const Operator eq = Operator(Token(Equals, "=", Location(0, 0)));
+    Register rcx = { "rcx", "ecx", "cx", "cl" };
+    Register rdx = { "rdx", "edx", "dx", "dl" };
+    Register r8 = { "r8", "r8d", "r8w", "r8b" };
+    Register r9 = { "r9", "r9d", "r9w", "r9b" };
+    Register param[4] = { rcx, rdx, r8, r9 };
+
+    auto r = ft->find(node->t.value);
+    if(r == ft->end()) 
     {
-        e->accept(this);
+        std::cout << "Unkown identifier '" << node->t.value << "'\n";
+        return;
+    }
+    node->f = r->second;
+
+    for (int i = 0; i < node->params.size(); i++) //TODO: fix calculation!!!!
+    {
+        if (i < 4)
+        {
+            node->params[i]->nodes.insert(node->params[i]->nodes.begin(), eq);
+            param[i].type = node->f.params[i].type;
+            node->params[i]->nodes.insert(node->params[i]->nodes.begin(), param[i]);
+            node->params[i]->accept(this);
+        }
+        else
+        {
+            int align = 8;
+            if (align - node->f.params[i].type.size >= 0)
+            {
+                node->f.paramStackSpace -= node->f.params[i].type.size;
+                node->f.params[i].numID = node->f.paramStackSpace;
+
+                node->params[i]->nodes.insert(node->params[i]->nodes.begin(), eq);
+                Literal destination = Literal("[rsp+" + std::to_string(node->f.params[i].numID) + "]");
+                destination.type = node->f.params[i].type;
+                node->params[i]->nodes.insert(node->params[i]->nodes.begin(), destination);
+                
+                node->params[i]->accept(this);
+                align -= node->f.params[i].type.size;
+            }
+            else
+            {
+                node->f.paramStackSpace -= align;
+                node->f.params[i].numID = node->f.paramStackSpace;
+
+                node->params[i]->nodes.insert(node->params[i]->nodes.begin(), eq);
+                Literal destination = Literal("[rsp+" + std::to_string(node->f.params[i].numID) + "]");
+                destination.type = node->f.params[i].type;
+                node->params[i]->nodes.insert(node->params[i]->nodes.begin(), destination);
+
+                node->params[i]->accept(this);
+                align = 8;
+                align -= node->f.params[i].type.size;
+            }
+            if (align == 0)
+            {
+                align = 8;
+            }
+        }
     }
 	return;
 }
 void Resolver::visit(ReturnCall* node) 
 {
+    if (node->expr->nodes.empty()) return;
+    if(node->expr->nodes.front().isRegister()) //Set correct type for the return value of a function
+    {
+        Register r = std::get<Register>(node->expr->nodes.front().value); 
+        r.type = curFunc->retType;
+        ExprNode temp = ExprNode(r);
+        node->expr->nodes.front().value.swap(temp.value);
+    }
     node->expr->accept(this);
 	return;
 }
@@ -240,7 +308,7 @@ void Resolver::visit(VarDef* node)
         spaceFor8ALign = 8;
     }
 	st->insert({ node->var.t.value, node->var });
-    node->expr->accept(this);
+    if(node->expr != nullptr) node->expr->accept(this);
 }
 void Resolver::visit(FuncDef* node) 
 {
@@ -299,14 +367,6 @@ void Resolver::visit(FuncDef* node)
         node->func.paramStackSpace += 40;
     }
 
-    
-
-    //Calculate stack-size for function
-    int reqSize = 0;
-    reqSize = 16 - (node->func.stackSize % 16);
-    reqSize += node->func.stackSize;
-    node->func.stackSize = reqSize;
-
     //Build VarDefs for stack param's so they can be used as variables
     if (node->func.params.size() > 4)
     {
@@ -325,6 +385,15 @@ void Resolver::visit(FuncDef* node)
 
     if (node->func.body != nullptr) node->func.body->accept(this);
 
+    //Calculate stack-size for function
+    if (node->func.stackSize != 0)
+    {
+        int reqSize = 0;
+        reqSize = 16 - (node->func.stackSize % 16);
+        reqSize += node->func.stackSize;
+        node->func.stackSize = reqSize;
+    }
+
     spaceFor8ALign = 8;
     *st = prevSt;
 }
@@ -338,25 +407,17 @@ void Resolver::visit(Body* node)
     {
         st = new std::unordered_map<std::string, Variable>();
     }
-    auto prevFT = *ft;
-    auto prevST = *st;
+    
 
-    if (curClass == nullptr)
-    {
-        if (ft == nullptr)
-        {
-            ft = new std::unordered_map<std::string, Function>();
-        }
-        if(st == nullptr)
-        {
-            st = new std::unordered_map<std::string, Variable>();
-        }
-    }
-    else
+    if (curClass != nullptr)
     {
         ft = &curClass->body->functionTable;
         st = &curClass->body->symbolTable;
     }
+
+    auto prevFT = *ft;
+    auto prevST = *st;
+
     for(Statement* s : node->statements)
     {
         s->accept(this);

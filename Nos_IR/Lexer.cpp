@@ -84,8 +84,44 @@ Token Lexer::peek_behind()
 
 bool Lexer::loadTokens(std::string curLine)
 {
+	std::string stringLiteral = "";
+	bool literalOpen = false;
 	for (int i = 0; i < curLine.length(); i++)
 	{
+		if(curLine[i] == '\'')
+		{
+			if(i+2 < curLine.length())
+			{
+				i++;
+				std::string temp = "";
+				temp = curLine[i];
+				tokenBuffer.push_back({ Character, temp, {loc.line, i}});
+				i++;
+				if(curLine[i] != '\'')
+				{
+					std::cout << "Missing closing quote\n";
+					return false;
+				}
+			}
+		}
+
+		if(curLine[i] == '"') 
+		{
+			if(literalOpen)
+			{
+				tokenBuffer.push_back({ String, stringLiteral, {loc.line, i} });
+				stringLiteral.clear();
+			}
+
+			literalOpen == !literalOpen;
+		}
+
+		if(literalOpen)
+		{
+			stringLiteral.append(1, curLine[i]);
+			continue;
+		}
+
 		auto sFound = symbols.find(curLine[i]);
 		if (sFound != symbols.end()) 
 		{
@@ -141,6 +177,7 @@ bool Lexer::loadTokens(std::string curLine)
 			else if(!std::isspace(curLine[i]))
 			{
 				std::cout << "Illegal character \"" << curLine[i] << "\"\n";
+				return false;
 			}
 		}
 	}

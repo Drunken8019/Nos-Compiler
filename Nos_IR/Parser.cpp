@@ -43,6 +43,7 @@ void Parser::parse()
 	Root root = parseRoot();
 	
 	res.resolveAST(&root);
+	tcheck.visit(&root);
 	gen.printAST(root, externs);
 }
 
@@ -136,6 +137,7 @@ FuncDef Parser::parseFunctionDef()
 	while (match(Asteriks))
 	{
 		fd.func.retType.isPtr = true;
+		fd.func.retType.size = 8;
 		fd.func.retType.ptrDepth++;
 	}
 
@@ -158,6 +160,7 @@ FuncDef Parser::parseExternDef()
 	while (match(Asteriks))
 	{
 		fd.func.retType.isPtr = true;
+		fd.func.retType.size = 8;
 		fd.func.retType.ptrDepth++;
 	}
 
@@ -181,6 +184,7 @@ Variable Parser::parseParamDef()
 	while (match(Asteriks))
 	{
 		v.type.isPtr = true;
+		v.type.size = 8;
 		v.type.ptrDepth++;
 	}
 	v.t = consume(Identifier, "Expected identifier");
@@ -227,7 +231,6 @@ Statement* Parser::parseStatement()
 
 VarDef Parser::parseVarDef()
 {
-	const Operator eq = Operator(Token(Equals, "=", Location(0, 0)));
 	Variable v;
 	Type type;
 	Token matchedTok;
@@ -239,17 +242,25 @@ VarDef Parser::parseVarDef()
 	while(match(Asteriks))
 	{
 		v.type.isPtr = true;
+		v.type.size = 8;
 		v.type.ptrDepth++;
 	}
 
 	v.t = consume(Identifier, "Expected identifier");
+
+	if(match(LSqParen))
+	{
+		v.type.isArray = true;
+		v.type.arraySize = std::stoi(consume(Number, "Expected array size").value); //TODO: make this an expression
+		consume(RSqParen, "Expected ']'");
+	}
 	
 	Expression* e = nullptr;;
 	if(match(Equals))
 	{
 		e = new Expression(parseExpression());
 		e->nodes.insert(e->nodes.begin(), ExprNode(eq));
-		e->nodes.insert(e->nodes.begin(),  ExprNode(VariableUse(v.t)));
+		e->nodes.insert(e->nodes.begin(),  ExprNode(VariableUse(v)));
 	}
 	
 	VarDef res = VarDef(v, e);
@@ -274,6 +285,11 @@ ReturnCall Parser::parseFuncReturn()
 {
 	ReturnCall rc;
 	rc.expr = new Expression(parseExpression());
+	if(!rc.expr->nodes.empty())
+	{
+		rc.expr->nodes.insert(rc.expr->nodes.begin(), ExprNode(eq));
+		rc.expr->nodes.insert(rc.expr->nodes.begin(), ExprNode(Register("rax", "eax", "ax", "al")));
+	}
 	return rc;
 }
 
@@ -282,6 +298,14 @@ IfStmnt Parser::parseIfStmnt()
 	IfStmnt res = IfStmnt(lex.peek_behind());
 	consume(LParen, "Expected '('");
 	res.cond = new Expression(parseExpression());
+	if (!res.cond->nodes.empty())
+	{
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(eq));
+		Register r = Register("r10", "r10d", "r10w", "r10b");
+		r.type = primTypes["char"];
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(r));
+	}
+
 	consume(RParen, "Expected ')'");
 	res.body = parseBody();
 	if(match(Elif))
@@ -300,6 +324,14 @@ ElIfStmnt Parser::parseElIfStmnt()
 	ElIfStmnt res = ElIfStmnt(lex.peek_behind());
 	consume(LParen, "Expected '('");
 	res.cond = new Expression(parseExpression());
+	if (!res.cond->nodes.empty())
+	{
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(eq));
+		Register r = Register("r10", "r10d", "r10w", "r10b");
+		r.type = primTypes["char"];
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(r));
+	}
+
 	consume(RParen, "Expected ')'");
 	res.body = parseBody();
 	if (match(Elif))
@@ -325,6 +357,13 @@ WhileStmnt Parser::parseWhileStmnt()
 	WhileStmnt res = WhileStmnt(lex.peek_behind());
 	consume(LParen, "Expected '('");
 	res.cond = new Expression(parseExpression());
+	if (!res.cond->nodes.empty())
+	{
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(eq));
+		Register r = Register("r10", "r10d", "r10w", "r10b");
+		r.type = primTypes["char"];
+		res.cond->nodes.insert(res.cond->nodes.begin(), ExprNode(r));
+	}
 	consume(RParen, "Expected ')'");
 	res.body = parseBody();
 	return res;
@@ -332,7 +371,7 @@ WhileStmnt Parser::parseWhileStmnt()
 
 Expression Parser::parseExpression()
 {
-	Expression res;
+	Expression res = Expression(lex.peek());
 	while(!match(Semicolon) && !match(Comma))
 	{
 		ExprNode en = parseExprNode();
@@ -347,14 +386,15 @@ Expression Parser::parseExpression()
 
 ExprNode Parser::parseExprNode()
 {
-	if(matchAny(Equals, Plus, Minus, Asteriks, Div, LDBracket, RDBracket, Ampersand, Pipe, DEquals, LDBEq, RDBEq, NotEq, PlusEq, MinusEq, DivEq, MultEq, DAmpersand, DPipe, BoolNeg))
+	if(matchAny(Equals, Plus, Minus, Asteriks, Div, Modulo, LDBracket, RDBracket, Ampersand, Pipe, DEquals, LDBEq, RDBEq, NotEq, PlusEq, MinusEq, DivEq, MultEq, DAmpersand, DPipe, BoolNeg))
 	{
 		return ExprNode(Operator(lex.peek_behind()));
 		//return parseOperator();
 	}
 	else if(check(LParen))
 	{
-		return ExprNode(Operator(open(LParen, "Expected '('")));
+		return ExprNode(LeftParen(open(LParen, "Expected '('")));
+		
 	}
 	else if(check(RParen))
 	{
@@ -362,10 +402,33 @@ ExprNode Parser::parseExprNode()
 		{
 			return ExprNode();
 		}
+		else
+		{
+			return ExprNode(RightParen(lex.peek_behind()));
+		}
 	}
 	else if(matchAny(Number))
 	{
-		return ExprNode(Literal(lex.peek_behind()));
+		Literal res = Literal(lex.peek_behind());
+		long numericalValue = std::stol(res.val);
+		if(numericalValue <= std::numeric_limits<char>::max() && numericalValue >= std::numeric_limits<char>::min())
+		{
+			res.type = primTypes["char"];
+		}
+		else if (numericalValue <= std::numeric_limits<short>::max() && numericalValue >= std::numeric_limits<short>::min())
+		{
+			res.type = primTypes["short"];
+		}
+		else if (numericalValue <= std::numeric_limits<int>::max() && numericalValue >= std::numeric_limits<int>::min())
+		{
+			res.type = primTypes["int"];
+		}
+		else if (numericalValue <= std::numeric_limits<long>::max() && numericalValue >= std::numeric_limits<long>::min())
+		{
+			res.type = primTypes["long"];
+		}
+
+		return ExprNode(res);
 	}
 	else if(match(Identifier))
 	{
@@ -379,7 +442,15 @@ ExprNode Parser::parseExprNode()
 			return ExprNode(VariableUse(lex.peek_behind()));
 		}
 	}
-
+	else if(match(NullPtr))
+	{
+		Literal res = Literal(lex.peek_behind());
+		res.val = "0";
+		res.type = primTypes["void"];
+		res.type.isPtr = true;
+		res.type.ptrDepth = -1;
+		return res;
+	}
 	else
 	{
 		printErrorMsg("'" + lex.peek().value + "' is not valid inside an expression", lex.peek());
@@ -452,6 +523,10 @@ Token Parser::open(TokenType t, const std::string& errorMsg)
 Token Parser::close(TokenType t, const std::string& errorMsg)
 {
 	if (openGroups.size() == 0) return errTok;
-	else if (openGroups.top()+1 == t) return consume(t, errorMsg); //Takes advantage of opening Parenthesis always being 1 ahead in the enum e.g. '(' = 9 and ')' = 10
+	else if (openGroups.top() + 1 == t)  //Takes advantage of opening Parenthesis always being 1 ahead in the enum e.g. '(' = 9 and ')' = 10
+	{
+		openGroups.pop();
+		return consume(t, errorMsg);
+	}
 	else return errTok;
 }

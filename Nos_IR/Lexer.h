@@ -32,6 +32,7 @@ private:
 		{"else", TokenType::Else},
 		{"while", TokenType::While},
 		{"extern", TokenType::Extern},
+		{"nullptr", TokenType::NullPtr},
 	};
 
 	std::unordered_map<char, TokenType> symbols = {
@@ -48,6 +49,7 @@ private:
 		{'-', TokenType::Minus},
 		{'*', TokenType::Asteriks},
 		{'/', TokenType::Div},
+		{'%', TokenType::Modulo},
 		{'<', TokenType::LDBracket},
 		{'>', TokenType::RDBracket},
 		{':', TokenType::Colon},

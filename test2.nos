@@ -1,0 +1,97 @@
+extern:long GetStdHandle(int handle);
+extern:char WriteConsoleA(long handle, char* msg, int msgSize, int reserved);
+extern:long GetProcessHeap();
+extern:void* HeapAlloc(long hHeap, int dwFlags, long dwBytes);
+extern:char HeapFree(long hHeap, int dwFlags, void* dwBytes);
+extern:char ReadConsoleA(long hConsoleInput, char* lpBuffer, int nNumberOfCharsToRead, int* lpNumberOfCharsRead, void* pInputControl);
+
+def:int main()
+{
+	let:char* input_str = alloc(110);
+	scan(input_str, 100);
+	print_num(hash(input_str));
+	return 0;
+}
+
+def:long mod_pow(long base, long exp, long mod)
+{
+	if(mod == 1)
+	{
+		return 123;
+	}
+	return pow(base, exp) % mod;
+}
+
+def:long pow(long base, long exp)
+{
+	let:long c = base;
+	let:long res = 1;
+	while(exp != 0)
+	{
+		let:long r = exp % 2;
+		if(r == 1)
+		{
+			res *= c;
+		}
+		exp = exp / 2;
+		c *= c;
+	}
+	return res;
+}
+
+def:void print(char* msg, int len)
+{
+	let:long handle = GetStdHandle(-11);
+	WriteConsoleA(handle, msg, len, 0);
+	return; 
+}
+
+def:void print_num(long num)
+{
+	let:char temp = 48;
+	
+	if(num > 0)
+	{
+		temp = num % 10 + 48;
+		if(num / 10)
+		{
+			print_num(num / 10);
+		}
+	}
+	print(&temp, 1);
+	return;
+}
+
+def:int scan(char* msgBuffer, int size)
+{
+	let:long handle = GetStdHandle(-10);
+	let:int charsRead = 0;
+	ReadConsoleA(handle, msgBuffer, size, &charsRead, nullptr);
+	*(msgBuffer + charsRead) = 0;
+	return charsRead;
+}
+
+def:void* alloc(long bytes)
+{
+	let:long heap = GetProcessHeap();
+	let:void* xy = HeapAlloc(heap, 8, bytes);
+	return xy;
+}
+
+def:long hash(char* string)
+{
+	let:int p = 31;
+	
+	let:int m = pow(10, 9) + 9;
+	let:long hash_val = 0;
+	let:long p_pow = 1;
+	while(*string)
+	{
+		let:char temp = 97;
+		print(&temp, 1);
+		hash_val = (hash_val + (*string - 97) * p_pow) % m;
+		p_pow = (p_pow * p) % m;
+		string += 1;
+	}
+	return hash_val;
+}	

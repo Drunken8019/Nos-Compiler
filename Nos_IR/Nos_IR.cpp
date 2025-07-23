@@ -3,6 +3,7 @@
 #include <string>
 #include <ctime>
 #include "Parser.h"
+#include <chrono>
 using namespace std;
 
 void temp_compile(char* src);
@@ -18,16 +19,12 @@ int main(int argc, char* argv[])
 	{
 		if (checkExtension(argv[1]))
 		{
-			time_t stamp = time(NULL);
-			tm start;
-			localtime_s(&start, &stamp);
-			cout << "Started at " << start.tm_hour << ":" << start.tm_min << ":" << start.tm_sec << endl;
+			std::chrono::time_point<std::chrono::system_clock> start, end;
+			start = std::chrono::system_clock::now();
 			temp_compile(argv[1]);
-			stamp = time(NULL);
-			tm end;
-			localtime_s(&end, &stamp);
-			int took = end.tm_sec - start.tm_sec; //TODO: fix time calculation... its bs rn
-			cout << std::endl << "Finished at " << end.tm_hour << ":" << end.tm_min << ":" << end.tm_sec << " and took " << took << " seconds" << endl;
+			end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed_seconds = end - start;
+			cout << std::endl << "Finished afer " << elapsed_seconds <<" seconds" << endl;
 		}
 		else cout << "Wrong file type. Correct extension: .nos";
 	}
