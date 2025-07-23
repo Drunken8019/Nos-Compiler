@@ -40,8 +40,9 @@ void TypeChecker::visit(Expression* node)
 
 	int depth = 1;
 	int maxDepth = 1;
-	for(ExprNode en : node->rpn) //Determine depth of Expression -> how many temporary Results need to be stored
+	for (int i = 0; i < node->rpn.size(); i++) //Determine depth of Expression -> how many temporary Results need to be stored
 	{
+		ExprNode en = node->rpn[i];
 		if(en.isFuncCall() || en.isLiteral() || en.isRegister() || en.isVariableUse())
 		{
 			if(en.isVariableUse())
@@ -53,6 +54,8 @@ void TypeChecker::visit(Expression* node)
 					std::cout << "Unknown identifier '" << vu.identifier << "'\n";
 					return;
 				}
+				vu.v = fv->second;
+				node->rpn[i] = vu;
 			}
 			else if(en.isFuncCall())
 			{
@@ -63,6 +66,8 @@ void TypeChecker::visit(Expression* node)
 					std::cout << "Unknown identifier '" << fc.t.value << "'\n";
 					return;
 				}
+				fc.f = ffc->second;
+				node->rpn[i] = fc;
 			}
 			depth++;
 		}
@@ -81,6 +86,14 @@ void TypeChecker::visit(Expression* node)
 }
 void TypeChecker::visit(FuncCall* node) 
 {
+	auto r = ft.find(node->t.value);
+	if (r == ft.end())
+	{
+		std::cout << "Unkown identifier '" << node->t.value << "'\n";
+		return;
+	}
+	node->f = r->second;
+
 	for(Expression *e : node->params)
 	{
 		e->accept(this);

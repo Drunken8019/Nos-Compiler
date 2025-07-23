@@ -66,6 +66,7 @@ private:
 		{"+=", TokenType::PlusEq},
 		{"-=", TokenType::MinusEq},
 		{"/=", TokenType::DivEq},
+		{"%=", TokenType::ModuloEq},
 		{"*=", TokenType::MultEq},
 		{"&&", TokenType::DAmpersand},
 		{"||", TokenType::DPipe},

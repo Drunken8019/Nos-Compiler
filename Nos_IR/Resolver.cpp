@@ -79,7 +79,6 @@ void Resolver::visit(Expression* node)
 
     //RPN
     std::stack<ExprNode> op;
-    std::vector<ExprNode> buffer;
 
     for (ExprNode n : node->nodes)
     {
@@ -151,7 +150,13 @@ void Resolver::visit(FuncCall* node)
     }
     node->f = r->second;
 
-    for (int i = 0; i < node->params.size(); i++) //TODO: fix calculation!!!!
+    if (node->f.isExtern)
+    {
+        node->f.paramStackSpace += 40;
+    }
+
+
+    for (int i = 0; i < node->params.size(); i++) //Handles parameters for functions: 1. Placed in Register/Stack 2. Where on stack
     {
         if (i < 4)
         {
@@ -172,7 +177,7 @@ void Resolver::visit(FuncCall* node)
                 Literal destination = Literal("[rsp+" + std::to_string(node->f.params[i].numID) + "]");
                 destination.type = node->f.params[i].type;
                 node->params[i]->nodes.insert(node->params[i]->nodes.begin(), destination);
-                
+
                 node->params[i]->accept(this);
                 align -= node->f.params[i].type.size;
             }
@@ -322,9 +327,9 @@ void Resolver::visit(FuncDef* node)
 
 	curFunc = &node->func;
 
-    for(int i = 0; i< node->func.params.size(); i++)
+    for(int i = 0; i< node->func.params.size(); i++)  
     {
-        if(i < 4)
+        if(i < 4) //VarDefs for register params
         {
             Expression* e = new Expression();
             e->nodes.push_back(ExprNode(param[i]));
@@ -393,6 +398,10 @@ void Resolver::visit(FuncDef* node)
         reqSize += node->func.stackSize;
         node->func.stackSize = reqSize;
     }
+
+    auto it = ft->find(node->func.t.value);
+    if (it != ft->end())
+        it->second = node->func;
 
     spaceFor8ALign = 8;
     *st = prevSt;
@@ -479,6 +488,25 @@ void Resolver::visitSignature(FuncDef* node)
 {
     auto r = ft->find(node->func.t.value);
     if (r != ft->end()) { std::cout << "Function \"" + node->func.t.value + "\" already defined in scope\n"; return; }
+
+    for (int i = 4; i < node->func.params.size(); i++)
+    {
+        //Calculate stack-size for callee (stack parameters)
+        int align = 8;
+        if (align - node->func.params[i].type.getSize() >= 0)
+        {
+            node->func.paramStackSpace += node->func.params[i].type.getSize();
+            align -= node->func.params[i].type.getSize();
+        }
+        else
+        {
+            node->func.paramStackSpace += align;
+            node->func.paramStackSpace += node->func.params[i].type.getSize();
+            align = 8;
+            align -= node->func.params[i].type.getSize();
+        }
+    }
+
     ft->insert({ node->func.t.value, node->func });
 }
 

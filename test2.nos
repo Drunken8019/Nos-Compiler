@@ -17,7 +17,7 @@ def:long mod_pow(long base, long exp, long mod)
 {
 	if(mod == 1)
 	{
-		return 123;
+		return 0;
 	}
 	return pow(base, exp) % mod;
 }

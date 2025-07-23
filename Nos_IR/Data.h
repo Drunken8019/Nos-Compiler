@@ -41,7 +41,7 @@ enum TokenType
 	/*Symbols*/
 	LCBrace, RCBrace, LParen, RParen, LSqParen, RSqParen, Equals, Semicolon, Comma,
 	Plus, Minus, Asteriks, Div, Modulo, LDBracket, RDBracket, DEquals, LDBEq, RDBEq, NotEq, Colon, 
-	PlusEq, MinusEq, MultEq, DivEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus, BoolNeg,
+	PlusEq, MinusEq, MultEq, DivEq, ModuloEq, Ampersand, DAmpersand, Pipe, DPipe, UAmpersand, UAsteriks, UMinus, BoolNeg,
 	/*Keywords*/
 	ClassDef, Let, Define, Identifier, Return, If, Elif, Else, While, Number, Extern, NullPtr, String, Character
 };

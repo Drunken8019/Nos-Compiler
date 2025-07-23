@@ -28,7 +28,7 @@ void x86Generator::visit(Root* node)
     return;
 }
 
-void x86Generator::visit(Expression* node) //TODO: Clean up this mess, and let moving of mem values into regs be done in printInstr
+void x86Generator::visit(Expression* node)
 {
     if (node->rpn.empty()) return;
     Expression* prev = curExpr;
@@ -57,41 +57,43 @@ void x86Generator::visit(Expression* node) //TODO: Clean up this mess, and let m
         {
             if (!tokens[i].isOperator()) continue;
             Operator op = std::get<Operator>(tokens[i].value);
+            Type Long = { 8, "long" };
 
             if(op.tok.type == UAmpersand)
             {
-                printInstr(tokens[i], freeTemp.front(), tokens[i - 1]);
+                //printInstr(tokens[i], freeTemp.front(), tokens[i - 1]);
+                ExprNode temp = freeTemp.front();
+                *out << unwrap(tokens[i]) << " " << unwrap(temp, Long) << ", " << unwrap(tokens[i - 1]) << "\n";
+                setType(&temp, incrPtrType(getType(tokens[i-1])));
                 auto last = tokens.erase(tokens.begin() + i - 1, tokens.begin() + i + 1);
-                tokens.insert(last, freeTemp.front());
+                tokens.insert(last, temp);
                 inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
                 reduced = true;
                 break;
             }
 
-            if(op.tok.type == UAsteriks)
+            else if(op.tok.type == UAsteriks) //Move UAmpersand and UAsteriks to printInstr
             {
-                int tempSize = curExprSize;
-                curExprSize = 8; //Mby this will be removed/changed when implementing type checker
-                printInstr(tokens[i], r12, tokens[i - 1]);
-                mov(freeTemp.front(), ptrR12);
-                curExprSize = tempSize;
+                //printInstr(tokens[i], r12, tokens[i - 1]);
+                *out << unwrap(tokens[i]) << " " << unwrap(r12, Long) << ", " << unwrap(tokens[i - 1]) << "\n";
+                ExprNode temp = freeTemp.front();
+                Type tempType = decrPtrType(getType(tokens[i - 1]));
+                setType(&temp, tempType);
+                *out << "mov " << unwrap(temp) << ", " << ptrR12.qReg << "\n";
 
                 auto last = tokens.erase(tokens.begin() + i - 1, tokens.begin() + i + 1);
-                tokens.insert(last, freeTemp.front());
+                tokens.insert(last, temp);
                 inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
                 reduced = true;
                 break;
             }
                            
-            if (op.isUnary && i >= 1)
+            else if (op.isUnary && i >= 1)
             {
                 ExprNode operand = tokens[i - 1];
-                mov(freeTemp.front(), operand);
-                printInstr(tokens[i], freeTemp.front());
                 auto last = tokens.erase(tokens.begin() + i - 1, tokens.begin() + i + 1);
-                tokens.insert(last, freeTemp.front());
+                tokens.insert(last, printInstr(op, operand));
                 reduced = true;
-                inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
                 break;
             }
             else if (op.isBinary && i >= 2)
@@ -99,34 +101,8 @@ void x86Generator::visit(Expression* node) //TODO: Clean up this mess, and let m
                 ExprNode l = tokens[i - 2];
                 ExprNode r = tokens[i - 1]; 
 
-                if(op.isAssign)
-                {
-                    mov(r10, l);
-                    printInstr(tokens[i], r10, r);
-                    mov(l, r10);
-                    auto last = tokens.erase(tokens.begin() + i - 2, tokens.begin() + i + 1);
-                    tokens.insert(last, l);
-                }
-                else
-                {
-                    mov(freeTemp.front(), l);
-                    printInstr(tokens[i], freeTemp.front(), r);
-                    auto last = tokens.erase(tokens.begin() + i - 2, tokens.begin() + i + 1);
-                    tokens.insert(last, freeTemp.front());
-                    inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
-                }
-
-                if (isTempInUse(l) != -1)
-                {
-                    freeTemp.push(inUseTemp[isTempInUse(l)]);
-                    inUseTemp.erase(inUseTemp.begin() + isTempInUse(l));
-                }
-
-                if (isTempInUse(r) != -1)
-                {
-                    freeTemp.push(inUseTemp[isTempInUse(r)]);
-                    inUseTemp.erase(inUseTemp.begin() + isTempInUse(r));
-                }
+                auto last = tokens.erase(tokens.begin() + i - 2, tokens.begin() + i + 1);
+                tokens.insert(last, printInstr(op, l, r));
                 
                 reduced = true;
                 break;
@@ -152,12 +128,6 @@ void x86Generator::visit(FuncCall* node)
     else node->f = f->second;
 
     int stackSpaceForCall = node->f.paramStackSpace;
-    
-    if(node->f.isExtern)
-    {
-        stackSpaceForCall += 40;
-        node->f.paramStackSpace += 40;
-    }
 
     if(!node->params.empty())
     {
@@ -405,7 +375,7 @@ std::string x86Generator::unwrap(ExprNode en)
         }
         fc.f = fr->second;
         fc.accept(this);
-        return chooseReg(rax);
+        return chooseReg(rax, fc.f.retType);
     }
     else if(en.isLiteral())
     {
@@ -492,38 +462,72 @@ ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l, ExprNode r)
         o = std::get<Operator>(instr.value);
     }
 
-    if(o.tok.type == Div || o.tok.type == Modulo) //TODO: test div/modulo for safety with function calls
+    if(o.tok.type == Div || o.tok.type == Modulo) //TODO: Handle temp results here, make a mov(ExprNode l, Type tl, ExprNode r, Type tr) which does type conversion
     {
-        mov(rax, l);
+        //mov(rax, l);
+        *out << "mov " << unwrap(rax, getType(l)) << ", " << unwrap(l) << "\n";
         *out << "mov r10, rdx\n";
         *out << "mov rdx, 0\n";  //replace this with xor, if it doesnt mess with comparisons
-        mov(rsi, r);
-        *out << o.keyWord << " " << chooseReg(rsi) << "\n";
-        
+        //mov(rsi, r);
+        *out << "mov " << unwrap(rsi, getType(r)) << ", " << unwrap(r) << "\n";
+        *out << o.keyWord << " " << chooseReg(rsi, getType(r)) << "\n";
+        ExprNode tempRes = freeTemp.front();
+        setType(&tempRes, getType(l));
+
         if(o.tok.type == Div)
         {
-            mov(l, rax);
+            //mov(l, rax);
+            *out << "mov " << unwrap(tempRes) << ", " << unwrap(rax, getType(l)) << "\n";
         }
         else if(o.tok.type == Modulo)
         {
             if(curExprSize == 1)
             {
+                mov(tempRes, Literal("ah"));
+            }
+            else
+            {
+                //mov(l, rdx);
+                *out << "mov " << unwrap(tempRes) << ", " << unwrap(rdx, getType(l)) << "\n";
+            }
+        }
+        else if (o.tok.type == DivEq)
+        {
+            //mov(l, rax);
+            *out << "mov " << unwrap(l) << ", " << unwrap(rax, getType(l)) << "\n";
+            *out << "mov rdx, r10\n";
+            freeTempInUse(r);
+            return l;
+        }
+        else if (o.tok.type == ModuloEq)
+        {
+            if (curExprSize == 1)
+            {
                 mov(l, Literal("ah"));
             }
             else
             {
-                mov(l, rdx);
+                //mov(l, rdx);
+                *out << "mov " << unwrap(l) << ", " << unwrap(rdx, getType(l)) << "\n";
             }
+            *out << "mov rdx, r10\n";
+            freeTempInUse(r);
+            return l;
         }
+        inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
         *out << "mov rdx, r10\n";
-        return l;
+        freeTempInUse(l);
+        freeTempInUse(r);
+        return tempRes;
     }
     else if(isCmp(o))
     {
         *out << "xor r10, r10\n";
         *out << "cmp " << sizeWord(getType(l)) << " " << unwrap(l) << ", " << unwrap(r) << "\n";
         *out << unwrap(instr) << " " << r10.bReg << "\n";
-        mov(l, r10);
+        //mov(l, r10);
+        *out << "mov " << unwrap(l) << ", " << unwrap(r10, getType(l)) << "\n";
+        freeTempInUse(r);
         return l;
     }
     else
@@ -531,15 +535,15 @@ ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l, ExprNode r)
         //ExprNode res = l;
         ExprNode leftOperand = l;
         ExprNode rightOperand = r;
-        ExprNode tempRes = freeTemp.front();
+        ExprNode tempRes;
         Type tLeft = getType(l);
         Type tRight = getType(r);
 
         if (o.isAssign)
         {
-            if(!rightOperand.isRegister() && !rightOperand.isLiteral() && !leftOperand.isRegister())
+            if(!rightOperand.isRegister() && !rightOperand.isLiteral() && !rightOperand.isFuncCall() && !leftOperand.isRegister())
             {
-                *out << "mov " << unwrap(r10, tRight) << ", " << sizeWord(tRight) << " " << unwrap(rightOperand);
+                *out << "mov " << unwrap(r10, tLeft) << ", " << unwrap(rightOperand) << "\n";
                 Register temp = r10;
                 temp.type = tRight;
                 rightOperand = temp;
@@ -547,19 +551,20 @@ ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l, ExprNode r)
         }
         else
         {
+            tempRes = freeTemp.front();
             if (!leftOperand.isRegister())
             {
                 if(!tempRes.isRegister())
                 {
-                    *out << "mov " << unwrap(r10, tLeft) << ", " << sizeWord(tLeft) << " " << unwrap(leftOperand);
-                    Register temp = r10;
+                    *out << "mov " << unwrap(rsi, tLeft) << ", " << sizeWord(tLeft) << " " << unwrap(leftOperand) << "\n";
+                    Register temp = rsi;
                     temp.type = tLeft;
                     leftOperand = temp;
                 }
                 else
                 {
-                    *out << "mov " << unwrap(tempRes, tLeft) << ", " << sizeWord(tLeft) << " " << unwrap(leftOperand);
-                    Register temp = std::get<Register>(tempRes.value);
+                    *out << "mov " << unwrap(tempRes, tLeft) << ", " << sizeWord(tLeft) << " " << unwrap(leftOperand) << "\n";
+                    Register temp = std::get<Register>(tempRes.value); //Change all of these type changes to setType
                     temp.type = tLeft;
                     leftOperand = temp;
                 }
@@ -567,7 +572,7 @@ ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l, ExprNode r)
             }
         }
 
-        if(tLeft.size > tRight.size)
+        if(tLeft.size > tRight.size && !rightOperand.isLiteral())
         {
             if(tRight.size < 4)
             {
@@ -578,19 +583,60 @@ ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l, ExprNode r)
             }
             else
             {
-                *out << "mov " << unwrap(r10, tLeft) << ", " << sizeWord(tRight) << " " << unwrap(rightOperand) << "\n";
+                *out << "mov " << unwrap(r10, tLeft) << ", " << unwrap(rightOperand, tLeft) << "\n";
                 Register temp = r10;
                 temp.type = tLeft;
                 rightOperand = temp;
             }
         }
-        *out << unwrap(instr) << " " << sizeWord(getType(leftOperand)) << " " << unwrap(leftOperand) << ", " << sizeWord(getType(rightOperand)) << " " << unwrap(rightOperand) << "\n";
+
+        if (o.tok.type == Asteriks || o.tok.type == MultEq)
+        {
+            if (!leftOperand.isRegister())
+            {
+                ExprNode tempMult = freeTemp.front();
+                inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
+                setType(&tempRes, getType(leftOperand));
+                *out << "mov " << unwrap(tempMult) << ", " << unwrap(leftOperand) << "\n";
+                freeTempInUse(leftOperand);
+                leftOperand = tempMult;
+            }
+        }
+
+        *out << unwrap(instr) << " " << sizeWord(getType(leftOperand)) << " " << unwrap(leftOperand) << ", " << unwrap(rightOperand, getType(leftOperand)) << "\n";
+
+        if(o.tok.type == MultEq)
+        {
+            *out << "mov " << unwrap(l) << ", " << unwrap(leftOperand) << "\n";
+            freeTempInUse(leftOperand);
+            freeTempInUse(rightOperand);
+            return l;
+        }
+        freeTempInUse(rightOperand);
+
+        if(!tempRes.isRegister() && !tempRes.isEmpty)
+        {
+            *out << "mov " << unwrap(tempRes) << ", " << unwrap(leftOperand) << "\n";
+            freeTempInUse(leftOperand);
+            return tempRes;
+        }
         return leftOperand;
     }
 }
 ExprNode x86Generator::printInstr(ExprNode instr, ExprNode l)
 {
-    *out << unwrap(instr) << " " << sizeWord(getType(l)) << " " << unwrap(l) << "\n";
+    ExprNode operand = l;
+
+    freeTempInUse(l);
+
+    if(l.isLiteral())
+    {
+        *out << "mov " << unwrap(freeTemp.front(), getType(operand)) << ", " << unwrap(operand) << "\n";
+        operand = freeTemp.front();
+        inUseTemp.push_back(freeTemp.front()); freeTemp.pop();
+    }
+    *out << unwrap(instr) << " " << sizeWord(getType(l)) << " " << unwrap(operand, getType(l)) << "\n";
+    return operand;
 }
 int x86Generator::isTempInUse(ExprNode n)
 {
@@ -791,4 +837,68 @@ Type x86Generator::getType(ExprNode n)
         VariableUse var = std::get<VariableUse>(n.value);
         return var.v.type;
     }
+}
+void x86Generator::setType(ExprNode* n, Type t)
+{
+    if (n->isFuncCall())
+    {
+        FuncCall c = std::get<FuncCall>(n->value);
+        c.f.retType = t;
+        *n = c;
+    }
+    else if (n->isLiteral())
+    {
+        Literal l = std::get<Literal>(n->value); 
+        l.type = t;
+        *n = l;
+    }
+    else if (n->isRegister())
+    {
+        Register r = std::get<Register>(n->value);
+        r.type = t;
+        *n = r;
+    }
+    else if (n->isVariableUse())
+    {
+        VariableUse var = std::get<VariableUse>(n->value);
+        var.v.type = t;
+        *n = var;
+    }
+    return;
+}
+Type x86Generator::incrPtrType(Type t)
+{
+    if(!t.isPtr)
+    {
+        t.nonPointerSize = t.size;
+    }
+    t.size = 8;
+    t.isPtr = true;
+    t.ptrDepth += 1;
+    return t;
+}
+Type x86Generator::decrPtrType(Type t)
+{
+    if (!t.isPtr)
+    {
+        return t;
+    }
+    t.ptrDepth -= 1;
+
+    if(t.ptrDepth == 0)
+    {
+        t.isPtr = false;
+        t.size = t.nonPointerSize;
+    }
+    return t;
+}
+bool x86Generator::freeTempInUse(ExprNode n)
+{
+    if (isTempInUse(n) != -1)
+    {
+        freeTemp.push(inUseTemp[isTempInUse(n)]);
+        inUseTemp.erase(inUseTemp.begin() + isTempInUse(n));
+        return true;
+    }
+    return false;
 }

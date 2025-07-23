@@ -43,17 +43,21 @@ public:
 	void printDefaultHeader(std::vector<std::string> externs);
 	std::string sizeWord(Type t);
 	std::string chooseReg(Register reg);
-	std::string x86Generator::chooseReg(Register reg, Type t);
+	std::string chooseReg(Register reg, Type t);
 	std::string keyWord(Token t);
 	bool isCmp(Operator o);
 	std::string resName(Token t);
 	std::string unwrap(ExprNode en);
-	std::string x86Generator::unwrap(ExprNode en, Type t);
+	std::string unwrap(ExprNode en, Type t);
 	Type getType(ExprNode n);
+	void setType(ExprNode* n, Type t);
+	Type incrPtrType(Type t);
+	Type decrPtrType(Type t);
 
 	ExprNode printInstr(ExprNode instr, ExprNode l, ExprNode r);
 	ExprNode printInstr(ExprNode instr, ExprNode l);
 	int isTempInUse(ExprNode n);
+	bool freeTempInUse(ExprNode n);
 
 	void mov(ExprNode des, ExprNode src);
 
