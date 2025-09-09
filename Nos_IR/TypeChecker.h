@@ -1,21 +1,16 @@
 #pragma once
 #include "Visitor.h"
-#include "stack"
-
-class Resolver : public Visitor
+class TypeChecker :
+    public Visitor
 {
 public:
-	std::unordered_map<std::string, Variable>* st = nullptr;
-	std::unordered_map<std::string, Function>* ft = nullptr;
-	Function *curFunc = nullptr;
-	Class *curClass = nullptr;
-	int followerCount = 0;
-	int spaceFor8ALign = 8;
-	int scopeOffset = 0;
-	bool reverseStackUsage = false;
+	Function* curFunc = nullptr;
+	std::unordered_map<std::string, Variable> st;
+	std::unordered_map<std::string, Function> ft;
 
-	void resolveAST(Root* root);
-	int getPrec(ExprNode n);
+	Type getType(ExprNode node);
+	Type checkBinaryOp(Operator op, Type l, Type r);
+	Type checkUnaryOp(Operator op, Type l);
 
 	void visit(Root* node) override;
 	void visit(Expression* node) override;

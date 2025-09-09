@@ -1,0 +1,60 @@
+.v-center {
+  margin: auto;
+}
+
+.h-center {
+	text-align: center;
+}
+
+.fimg {
+  margin-top: 10%;
+  width: 90%;
+  height: auto;
+}
+
+.underline {
+  border-bottom: 2px lightgreen solid;
+  margin-bottom: 2%;
+}
+
+.top {
+  margin-top: 2.5%;
+}
+
+.sidebar {
+  overflow: auto;
+  position: fixed;
+  height: 100vh;
+  width: 20vw;
+  left: 0;
+  top: 0;
+  background-color: lightgreen;
+}
+
+p {
+  font-size: large;
+}
+
+.menu {
+  margin-top: 10%;
+  margin-left: 5%;
+}
+
+.menu li, .menu button{
+  font-size: large;
+  color: black;
+}
+
+.menu button {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu button:hover {
+  color: rgb(90, 90, 90);
+}
+
+ol > li::marker { 
+  content: counters(list-item, '.') '. '; 
+}
